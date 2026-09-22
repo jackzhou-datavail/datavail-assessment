@@ -1,0 +1,1194 @@
+{
+  "datasets": [
+    {
+      "name": "ds_scores_today",
+      "displayName": "Health Scores (Today)",
+      "queryLines": [
+        "SELECT dimension, score, score_delta_30d,\n  CASE WHEN score < 60 THEN 'critical' WHEN score < 75 THEN 'warning' ELSE 'healthy' END AS score_band\nFROM gold_health_scores WHERE report_date = CURRENT_DATE()"
+      ]
+    },
+    {
+      "name": "ds_kpis",
+      "displayName": "Overview KPIs",
+      "queryLines": [
+        "SELECT\n  (SELECT score FROM gold_health_scores WHERE report_date = CURRENT_DATE() AND dimension = 'overall') AS overall_score,\n  (SELECT COUNT(*) FROM gold_remediation_backlog WHERE severity = 'critical') AS critical_findings,\n  (SELECT COUNT(*) FROM gold_remediation_backlog WHERE severity = 'high') AS high_findings,\n  (SELECT COUNT(*) FROM raw_ws_pipelines WHERE has_owner_tag = false) AS pipelines_no_owner"
+      ]
+    },
+    {
+      "name": "ds_etl_trend",
+      "displayName": "ETL Hygiene Score Trend",
+      "queryLines": [
+        "SELECT report_date, score FROM gold_health_scores WHERE dimension = 'etl_hygiene' ORDER BY report_date"
+      ]
+    },
+    {
+      "name": "ds_critical_backlog",
+      "displayName": "Critical Findings",
+      "queryLines": [
+        "SELECT severity, category, asset_name, description, business_impact_usd, recommended_action\nFROM gold_remediation_backlog WHERE severity = 'critical' ORDER BY business_impact_usd DESC"
+      ]
+    },
+    {
+      "name": "ds_bronze_edits",
+      "displayName": "Bronze Table Edits",
+      "queryLines": [
+        "SELECT table_name, edit_count_90d, severity, downstream_gold_table_count, estimated_rerun_cost_usd\nFROM gold_bronze_table_edits ORDER BY edit_count_90d DESC"
+      ]
+    },
+    {
+      "name": "ds_bronze_edits_critical",
+      "displayName": "Critical Bronze Table Edits",
+      "queryLines": [
+        "SELECT table_name, edit_count_90d, downstream_gold_table_count, estimated_rerun_cost_usd\nFROM gold_bronze_table_edits WHERE severity = 'critical' ORDER BY estimated_rerun_cost_usd DESC"
+      ]
+    },
+    {
+      "name": "ds_pipeline_failures",
+      "displayName": "Pipeline Failure Rates",
+      "queryLines": [
+        "SELECT pipeline_name, failure_rate_30d, health_status FROM gold_pipeline_health\nWHERE failure_rate_30d > 0 ORDER BY failure_rate_30d DESC LIMIT 15"
+      ]
+    },
+    {
+      "name": "ds_pipeline_ownership",
+      "displayName": "Production Pipeline Ownership",
+      "queryLines": [
+        "SELECT CASE WHEN has_owner_tag THEN 'Owned' ELSE 'Unowned' END AS ownership_status, COUNT(*) AS pipeline_count\nFROM gold_pipeline_health WHERE is_production = TRUE GROUP BY has_owner_tag"
+      ]
+    },
+    {
+      "name": "ds_ownership_trend_long",
+      "displayName": "Ownership Coverage Trend",
+      "queryLines": [
+        "SELECT report_date, 'Actual' AS series, ownership_coverage_pct AS coverage_pct FROM gold_ownership_trend\nUNION ALL\nSELECT report_date, 'Goal' AS series, goal_pct AS coverage_pct FROM gold_ownership_trend\nORDER BY report_date"
+      ]
+    },
+    {
+      "name": "ds_backlog",
+      "displayName": "Full Remediation Backlog",
+      "queryLines": [
+        "SELECT finding_id, severity, category, asset_type, asset_name, owner_email, description,\n  business_impact_usd, recommended_action, sprint_estimate_days\nFROM gold_remediation_backlog\nORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, business_impact_usd DESC"
+      ]
+    },
+    {
+      "name": "ds_backlog_kpis",
+      "displayName": "Backlog KPIs",
+      "queryLines": [
+        "SELECT\n  (SELECT COUNT(*) FROM gold_remediation_backlog WHERE severity = 'critical') AS critical_count,\n  (SELECT COUNT(*) FROM gold_remediation_backlog WHERE severity = 'high') AS high_count,\n  (SELECT COUNT(*) FROM gold_remediation_backlog WHERE severity = 'medium') AS medium_count"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "health_overview",
+      "displayName": "Health Score Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "page1_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Workspace Health Assessment\n",
+                "\n",
+                "Overall score, four dimension breakdowns, and the top critical findings driving them.\n",
+                "\n",
+                "Top risk: bronze tables directly edited in the past 90 days, bypassing pipeline expectations. See the ETL deep-dive on page 2."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_overall_score",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpis",
+                  "fields": [
+                    {
+                      "name": "overall_score",
+                      "expression": "`overall_score`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "overall_score",
+                  "displayName": "Overall Health Score"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Overall Health Score",
+                "showDescription": true,
+                "description": "0-100 workspace health score"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_critical_findings",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpis",
+                  "fields": [
+                    {
+                      "name": "critical_findings",
+                      "expression": "`critical_findings`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_findings",
+                  "displayName": "Critical Findings"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical Findings",
+                "showDescription": true,
+                "description": "Findings requiring immediate action"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_high_findings",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpis",
+                  "fields": [
+                    {
+                      "name": "high_findings",
+                      "expression": "`high_findings`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "high_findings",
+                  "displayName": "High Findings"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "High Findings",
+                "showDescription": true,
+                "description": "Address in the next 2 sprints"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_pipelines_no_owner",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpis",
+                  "fields": [
+                    {
+                      "name": "pipelines_no_owner",
+                      "expression": "`pipelines_no_owner`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "pipelines_no_owner",
+                  "displayName": "Pipelines Without Owner"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Pipelines Without Owner",
+                "showDescription": true,
+                "description": "No owner tag assigned"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 3,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "dimension_score_bars",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_scores_today",
+                  "fields": [
+                    {
+                      "name": "score",
+                      "expression": "`score`"
+                    },
+                    {
+                      "name": "dimension",
+                      "expression": "`dimension`"
+                    },
+                    {
+                      "name": "score_band",
+                      "expression": "`score_band`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "dimension",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "score_band",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "critical",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "warning",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "healthy",
+                        "color": "#10B981"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Health Score by Dimension",
+                "showDescription": true,
+                "description": "ETL Hygiene is the dimension needing the most attention."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 8,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "score_trend_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_etl_trend",
+                  "fields": [
+                    {
+                      "name": "report_date",
+                      "expression": "`report_date`"
+                    },
+                    {
+                      "name": "score",
+                      "expression": "`score`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "report_date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "ETL Hygiene Score Trend (30 days)",
+                "showDescription": true,
+                "description": "Tracks the ETL Hygiene dimension score day over day."
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 7,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "top_anti_patterns_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_critical_backlog",
+                  "fields": [
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "asset_name",
+                      "expression": "`asset_name`"
+                    },
+                    {
+                      "name": "description",
+                      "expression": "`description`"
+                    },
+                    {
+                      "name": "business_impact_usd",
+                      "expression": "`business_impact_usd`"
+                    },
+                    {
+                      "name": "recommended_action",
+                      "expression": "`recommended_action`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category"
+                  },
+                  {
+                    "fieldName": "asset_name",
+                    "displayName": "Asset"
+                  },
+                  {
+                    "fieldName": "description",
+                    "displayName": "Description"
+                  },
+                  {
+                    "fieldName": "business_impact_usd",
+                    "displayName": "Annual Cost (USD)",
+                    "format": {
+                      "type": "number",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "recommended_action",
+                    "displayName": "Recommended Action"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top Anti-Patterns by Impact (Critical)",
+                "showDescription": true,
+                "description": "The most urgent findings, each row is a Jira ticket waiting to happen."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "etl_hygiene",
+      "displayName": "ETL Hygiene Deep-Dive",
+      "layout": [
+        {
+          "widget": {
+            "name": "page2_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## ETL Hygiene Deep-Dive\n",
+                "\n",
+                "Bronze table DML violations ranked by frequency, pipeline failure rates, and ownership coverage trend."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bronze_edits_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_bronze_edits",
+                  "fields": [
+                    {
+                      "name": "edit_count_90d",
+                      "expression": "`edit_count_90d`"
+                    },
+                    {
+                      "name": "table_name",
+                      "expression": "`table_name`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "edit_count_90d",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "table_name",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "severity",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "critical",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "high",
+                        "color": "#F59E0B"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Direct DML Writes on Bronze Tables (90 days)",
+                "showDescription": true,
+                "description": "Every bar here represents a pipeline expectation bypass."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 8,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "bronze_edit_cost_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_bronze_edits_critical",
+                  "fields": [
+                    {
+                      "name": "table_name",
+                      "expression": "`table_name`"
+                    },
+                    {
+                      "name": "edit_count_90d",
+                      "expression": "`edit_count_90d`"
+                    },
+                    {
+                      "name": "downstream_gold_table_count",
+                      "expression": "`downstream_gold_table_count`"
+                    },
+                    {
+                      "name": "estimated_rerun_cost_usd",
+                      "expression": "`estimated_rerun_cost_usd`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "table_name",
+                    "displayName": "Table"
+                  },
+                  {
+                    "fieldName": "edit_count_90d",
+                    "displayName": "Edits"
+                  },
+                  {
+                    "fieldName": "downstream_gold_table_count",
+                    "displayName": "Gold Tables Affected"
+                  },
+                  {
+                    "fieldName": "estimated_rerun_cost_usd",
+                    "displayName": "Annual Cost (USD)",
+                    "format": {
+                      "type": "number",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Bronze Edit Cost & Downstream Impact",
+                "showDescription": true,
+                "description": "The critical bronze tables drive most of the annual rerun cost."
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "sec_pipeline_health",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Pipeline Health & Ownership"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 10,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "pipeline_failure_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_pipeline_failures",
+                  "fields": [
+                    {
+                      "name": "pipeline_name",
+                      "expression": "`pipeline_name`"
+                    },
+                    {
+                      "name": "failure_rate_30d",
+                      "expression": "`failure_rate_30d`"
+                    },
+                    {
+                      "name": "health_status",
+                      "expression": "`health_status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "pipeline_name",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "failure_rate_30d",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "health_status",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "critical",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "warning",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "healthy",
+                        "color": "#10B981"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Pipeline Failure Rate (30 days)",
+                "showDescription": true,
+                "description": "The worst-failing pipelines are being manually re-triggered every week."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "pipeline_ownership_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_pipeline_ownership",
+                  "fields": [
+                    {
+                      "name": "pipeline_count",
+                      "expression": "`pipeline_count`"
+                    },
+                    {
+                      "name": "ownership_status",
+                      "expression": "`ownership_status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "pipeline_count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "ownership_status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "ownership_status",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Owned",
+                        "color": "#10B981"
+                      },
+                      {
+                        "value": "Unowned",
+                        "color": "#EF4444"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Production Pipelines by Ownership",
+                "showDescription": true,
+                "description": "Unowned production pipelines mean nobody knows who to call when things break."
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 11,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "ownership_trend_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_ownership_trend_long",
+                  "fields": [
+                    {
+                      "name": "report_date",
+                      "expression": "`report_date`"
+                    },
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    },
+                    {
+                      "name": "series",
+                      "expression": "`series`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "report_date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "coverage_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Actual",
+                        "color": "#3B82F6"
+                      },
+                      {
+                        "value": "Goal",
+                        "color": "#10B981"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Ownership Coverage - 30-day Trend",
+                "showDescription": true,
+                "description": "Actual coverage vs. the 95% goal line."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    },
+    {
+      "name": "remediation_backlog",
+      "displayName": "Remediation Backlog",
+      "layout": [
+        {
+          "widget": {
+            "name": "page3_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Remediation Backlog - Sprint Planning View\n",
+                "\n",
+                "Every finding ranked by severity then business impact. Export to CSV and load into Jira."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "backlog_kpi_critical",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_backlog_kpis",
+                  "fields": [
+                    {
+                      "name": "critical_count",
+                      "expression": "`critical_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_count",
+                  "displayName": "Critical Findings"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical Findings",
+                "showDescription": true,
+                "description": "Address this sprint"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "backlog_kpi_high",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_backlog_kpis",
+                  "fields": [
+                    {
+                      "name": "high_count",
+                      "expression": "`high_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "high_count",
+                  "displayName": "High Findings"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "High Findings",
+                "showDescription": true,
+                "description": "Address next 2 sprints"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "backlog_kpi_medium",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_backlog_kpis",
+                  "fields": [
+                    {
+                      "name": "medium_count",
+                      "expression": "`medium_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "medium_count",
+                  "displayName": "Medium Findings"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Medium Findings",
+                "showDescription": true,
+                "description": "Address this quarter"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "backlog_full_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_backlog",
+                  "fields": [
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "asset_type",
+                      "expression": "`asset_type`"
+                    },
+                    {
+                      "name": "asset_name",
+                      "expression": "`asset_name`"
+                    },
+                    {
+                      "name": "owner_email",
+                      "expression": "`owner_email`"
+                    },
+                    {
+                      "name": "description",
+                      "expression": "`description`"
+                    },
+                    {
+                      "name": "business_impact_usd",
+                      "expression": "`business_impact_usd`"
+                    },
+                    {
+                      "name": "recommended_action",
+                      "expression": "`recommended_action`"
+                    },
+                    {
+                      "name": "sprint_estimate_days",
+                      "expression": "`sprint_estimate_days`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category"
+                  },
+                  {
+                    "fieldName": "asset_type",
+                    "displayName": "Asset Type"
+                  },
+                  {
+                    "fieldName": "asset_name",
+                    "displayName": "Asset"
+                  },
+                  {
+                    "fieldName": "owner_email",
+                    "displayName": "Owner"
+                  },
+                  {
+                    "fieldName": "description",
+                    "displayName": "Finding"
+                  },
+                  {
+                    "fieldName": "business_impact_usd",
+                    "displayName": "Annual Impact (USD)",
+                    "format": {
+                      "type": "number",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "recommended_action",
+                    "displayName": "Recommended Action"
+                  },
+                  {
+                    "fieldName": "sprint_estimate_days",
+                    "displayName": "Effort (days)"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Full Remediation Backlog",
+                "showDescription": true,
+                "description": "Sorted by severity, then annual impact."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 12,
+            "height": 10
+          }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {}
+  }
+}

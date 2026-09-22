@@ -1,0 +1,96 @@
+# Databricks Asset Bundle — Workspace Health Assessment Demo
+#
+# Provisions: AI/BI Dashboard + setup job (data gen → Genie deploy).
+# No SDP pipeline (data generated via Python SDK).
+# No Databricks App. No Lakebase.
+#
+# ── 2-command deploy ───────────────────────────────────────────────────────
+#   1. databricks bundle deploy  --var catalog=solution_builder \
+#                                --var schema=demo_workspace_health_assessment_report \
+#                                --var warehouse_id=5c7c72ebf856f7c4
+#   2. databricks bundle run workspace_health_setup  --var ...
+# ──────────────────────────────────────────────────────────────────────────
+
+bundle:
+  name: workspace-health-assessment
+
+variables:
+  catalog:
+    description: "Unity Catalog for demo resources"
+    default: "solution_builder"
+  schema:
+    description: "Schema within the catalog"
+    default: "demo_workspace_health_assessment_report"
+  warehouse_id:
+    description: "SQL Warehouse ID — powers the dashboard + Genie space"
+    default: "5c7c72ebf856f7c4"
+
+sync:
+  include:
+    - "src/**"
+    - "data_generation/**"
+  exclude:
+    - "app/**"
+    - "**/__pycache__/**"
+
+targets:
+  dev:
+    default: true
+    mode: development
+  prod:
+    mode: production
+
+resources:
+  # ──────────────────────────────────────────────────────────────────────────
+  # AI/BI Dashboard — deployed by `bundle deploy`.
+  # dataset_catalog / dataset_schema rebind the embedded queries per-target.
+  # ──────────────────────────────────────────────────────────────────────────
+  dashboards:
+    workspace_health_dashboard:
+      display_name: "[${bundle.target}] Workspace Health Assessment"
+      file_path: ./src/dashboard/dashboard.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema}
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Setup job — runs AFTER `bundle deploy`.
+  #   generate_data   → synthetic workspace metadata into UC tables
+  #   deploy_genie    → creates / updates the Genie space (not declarable)
+  # ──────────────────────────────────────────────────────────────────────────
+  jobs:
+    workspace_health_setup:
+      name: "[${bundle.target}] Workspace Health Setup"
+      description: "generate synthetic data → deploy Genie space"
+      tasks:
+        - task_key: generate_data
+          notebook_task:
+            notebook_path: ./data_generation/generate_data.py
+            base_parameters:
+              catalog:      ${var.catalog}
+              schema:       ${var.schema}
+              warehouse_id: ${var.warehouse_id}
+          environment_key: sdk_default
+
+        - task_key: deploy_genie
+          depends_on: [{ task_key: generate_data }]
+          notebook_task:
+            notebook_path: ./src/deploy/deploy_genie.py
+            base_parameters:
+              catalog:      ${var.catalog}
+              schema:       ${var.schema}
+              warehouse_id: ${var.warehouse_id}
+          environment_key: sdk_latest
+
+      environments:
+        - environment_key: sdk_default
+          spec:
+            client: "4"
+            dependencies:
+              - "faker"
+              - "databricks-sdk>=0.114.0"
+        - environment_key: sdk_latest
+          spec:
+            client: "4"
+            dependencies:
+              - "databricks-sdk>=0.114.0"

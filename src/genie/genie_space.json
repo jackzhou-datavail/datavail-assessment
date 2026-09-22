@@ -1,0 +1,356 @@
+{
+  "version": 2,
+  "config": {
+    "sample_questions": [
+      {
+        "id": "10000000000000000000000000000001",
+        "question": [
+          "What is the current workspace health score and which dimension is worst?"
+        ]
+      },
+      {
+        "id": "10000000000000000000000000000002",
+        "question": [
+          "Which bronze tables have been directly modified, and what is the estimated annual cost of cascading failures?"
+        ]
+      },
+      {
+        "id": "10000000000000000000000000000003",
+        "question": [
+          "Which ML models are serving features from tables that had direct writes in the last 30 days?"
+        ]
+      },
+      {
+        "id": "10000000000000000000000000000004",
+        "question": [
+          "Which production pipelines have no owner tag?"
+        ]
+      },
+      {
+        "id": "10000000000000000000000000000005",
+        "question": [
+          "How has ownership coverage improved over the past 30 days?"
+        ]
+      },
+      {
+        "id": "10000000000000000000000000000006",
+        "question": [
+          "Show me the top 10 critical and high findings ranked by business impact."
+        ]
+      }
+    ]
+  },
+  "data_sources": {
+    "tables": [
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_bronze_table_edits",
+        "column_configs": [
+          {
+            "column_name": "downstream_gold_tables",
+            "description": [
+              "Comma-separated list of gold tables that depend on this bronze table via lineage."
+            ],
+            "synonyms": [
+              "downstream tables",
+              "affected tables"
+            ]
+          },
+          {
+            "column_name": "edit_count_90d",
+            "description": [
+              "Number of direct DML events (INSERT/UPDATE/DELETE/MERGE/TRUNCATE) in the past 90 days."
+            ],
+            "synonyms": [
+              "edits",
+              "direct writes",
+              "DML events"
+            ]
+          },
+          {
+            "column_name": "estimated_rerun_cost_usd",
+            "description": [
+              "Annual estimated cost in USD from pipeline reruns caused by direct DML writes on this bronze table."
+            ],
+            "synonyms": [
+              "rerun cost",
+              "annual cost",
+              "cascading failure cost"
+            ]
+          },
+          {
+            "column_name": "severity",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "table_name",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_health_scores",
+        "column_configs": [
+          {
+            "column_name": "dimension",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true,
+            "description": [
+              "Health dimension: overall, etl_hygiene, ml_ai_governance, ownership_access, data_quality."
+            ]
+          },
+          {
+            "column_name": "score",
+            "description": [
+              "Health score 0-100. Below 60 = critical, 60-74 = needs attention, 75+ = healthy."
+            ],
+            "synonyms": [
+              "health score",
+              "workspace score"
+            ]
+          },
+          {
+            "column_name": "score_delta_30d",
+            "description": [
+              "Change in score vs 30 days ago. Negative means the dimension is deteriorating."
+            ],
+            "synonyms": [
+              "score change",
+              "trend",
+              "delta"
+            ]
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_ownership_trend",
+        "column_configs": [
+          {
+            "column_name": "ownership_coverage_pct",
+            "description": [
+              "Percentage of production pipelines with owner tags. Trend goes from 58% (30 days ago) to 69% (today). Goal is 95%."
+            ],
+            "synonyms": [
+              "ownership",
+              "coverage",
+              "ownership rate"
+            ]
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_pipeline_health",
+        "column_configs": [
+          {
+            "column_name": "failure_rate_30d",
+            "description": [
+              "Fraction of runs that failed in the last 30 days (0.0 to 1.0). customer_churn_etl, revenue_pipeline_v1, and ml_feature_refresh all exceed 0.40."
+            ],
+            "synonyms": [
+              "failure rate",
+              "error rate"
+            ]
+          },
+          {
+            "column_name": "has_owner_tag",
+            "description": [
+              "True if the pipeline has an owner tag assigned. 31 pipelines have has_owner_tag = FALSE \u2014 these are the orphaned pipelines."
+            ],
+            "synonyms": [
+              "has owner",
+              "owned",
+              "orphaned"
+            ]
+          },
+          {
+            "column_name": "health_status",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "pipeline_name",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_remediation_backlog",
+        "column_configs": [
+          {
+            "column_name": "asset_name",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "business_impact_usd",
+            "description": [
+              "Annual business impact in USD if this finding is not remediated."
+            ],
+            "synonyms": [
+              "impact",
+              "cost",
+              "risk"
+            ]
+          },
+          {
+            "column_name": "category",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "severity",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "sprint_estimate_days",
+            "description": [
+              "Engineering effort estimate in days to resolve this finding."
+            ],
+            "synonyms": [
+              "effort",
+              "fix time"
+            ]
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.raw_ws_audit_events",
+        "column_configs": [
+          {
+            "column_name": "action_type",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true,
+            "description": [
+              "DML operation type: INSERT, UPDATE, DELETE, MERGE, TRUNCATE."
+            ]
+          },
+          {
+            "column_name": "query_snippet",
+            "exclude": true
+          },
+          {
+            "column_name": "table_name",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "user_email",
+            "description": [
+              "Engineer who ran the DML query directly on the bronze table."
+            ],
+            "synonyms": [
+              "user",
+              "editor",
+              "who"
+            ]
+          }
+        ]
+      },
+      {
+        "identifier": "solution_builder.demo_workspace_health_assessment_report.raw_ws_ml_models",
+        "column_configs": [
+          {
+            "column_name": "is_serving_stale_features",
+            "description": [
+              "TRUE if the model's serving endpoint is reading from a bronze table that received direct DML writes in the last 30 days. Exactly 2 models have this flag set."
+            ],
+            "synonyms": [
+              "stale features",
+              "stale model",
+              "data staleness"
+            ]
+          },
+          {
+            "column_name": "model_name",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "registered_in_uc",
+            "description": [
+              "True if model is registered in Unity Catalog model registry. FALSE means lineage is broken."
+            ]
+          },
+          {
+            "column_name": "upstream_features_table",
+            "description": [
+              "The table the model's training pipeline reads from for feature data."
+            ],
+            "synonyms": [
+              "feature table",
+              "input table"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "instructions": {
+    "text_instructions": [
+      {
+        "id": "30000000000000000000000000000001",
+        "content": [
+          "## PURPOSE",
+          "- Answer workspace health questions for Alex Chen (Head of Data Engineering) and their engineering team.",
+          "- This workspace has a 68/100 health score (was 71 thirty days ago). ETL Hygiene (55) is the worst dimension.",
+          "## DISAMBIGUATION",
+          "- 'Health score' means the score column in gold_health_scores WHERE report_date = CURRENT_DATE.",
+          "- 'Bronze table edits' refers to gold_bronze_table_edits \u2014 use edit_count_90d for frequency and estimated_rerun_cost_usd for cost.",
+          "- 'Stale features' means raw_ws_ml_models WHERE is_serving_stale_features = TRUE (exactly 2 models).",
+          "- 'Unowned pipelines' means gold_pipeline_health WHERE has_owner_tag = FALSE (31 total, 9 production).",
+          "- When the user asks about 'the worst table' or 'most edited table', that is raw_transactions with 47 edits.",
+          "## DATA QUALITY NOTES",
+          "- gold_health_scores has one row per (report_date, dimension). Use WHERE report_date = CURRENT_DATE for today's score.",
+          "- gold_bronze_table_edits has exactly 14 rows \u2014 one per bronze table with direct DML in 90 days.",
+          "- SUM(estimated_rerun_cost_usd) in gold_bronze_table_edits equals exactly $87,000.",
+          "- gold_ownership_trend covers 30 days; ownership_coverage_pct goes from ~58% to ~69%.",
+          "## Instructions you must follow when providing summaries",
+          "- Always state the total at-risk amount ($250K/year) when summarizing workspace health.",
+          "- When quoting bronze table edit costs, confirm the total is $87K/year.",
+          "- Round percentages to one decimal place."
+        ]
+      }
+    ],
+    "example_question_sqls": [
+      {
+        "id": "20000000000000000000000000000001",
+        "question": [
+          "Which bronze tables have the most direct edits and what is the total rerun cost?"
+        ],
+        "sql": [
+          "SELECT gold_bronze_table_edits.table_name, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.severity, gold_bronze_table_edits.downstream_gold_tables, gold_bronze_table_edits.estimated_rerun_cost_usd FROM `solution_builder.demo_workspace_health_assessment_report`.`gold_bronze_table_edits` ORDER BY gold_bronze_table_edits.edit_count_90d DESC"
+        ],
+        "usage_guidance": [
+          "Use this for the primary bronze-edit cost analysis. The SUM of estimated_rerun_cost_usd = $87K/year."
+        ]
+      },
+      {
+        "id": "20000000000000000000000000000002",
+        "question": [
+          "Which ML models are serving stale features and which bronze table caused the staleness?"
+        ],
+        "sql": [
+          "WITH stale_models AS (SELECT raw_ws_ml_models.model_name, raw_ws_ml_models.serving_endpoint_name, raw_ws_ml_models.upstream_features_table, raw_ws_ml_models.features_last_modified_date FROM `solution_builder.demo_workspace_health_assessment_report`.`raw_ws_ml_models` WHERE raw_ws_ml_models.is_serving_stale_features = TRUE) SELECT stale_models.model_name, stale_models.serving_endpoint_name, stale_models.upstream_features_table, stale_models.features_last_modified_date, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.estimated_rerun_cost_usd FROM stale_models LEFT JOIN `solution_builder.demo_workspace_health_assessment_report`.`gold_bronze_table_edits` ON stale_models.upstream_features_table = gold_bronze_table_edits.table_name"
+        ],
+        "usage_guidance": [
+          "Cross-table join: connects ML model staleness to the bronze table edits that caused it. Returns exactly 2 models."
+        ]
+      },
+      {
+        "id": "20000000000000000000000000000003",
+        "question": [
+          "Show the full remediation backlog ranked by severity and business impact"
+        ],
+        "sql": [
+          "SELECT gold_remediation_backlog.finding_id, gold_remediation_backlog.severity, gold_remediation_backlog.category, gold_remediation_backlog.asset_type, gold_remediation_backlog.asset_name, gold_remediation_backlog.owner_email, gold_remediation_backlog.description, gold_remediation_backlog.business_impact_usd, gold_remediation_backlog.recommended_action, gold_remediation_backlog.sprint_estimate_days FROM `solution_builder.demo_workspace_health_assessment_report`.`gold_remediation_backlog` ORDER BY CASE gold_remediation_backlog.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, gold_remediation_backlog.business_impact_usd DESC"
+        ],
+        "usage_guidance": [
+          "Sprint-planning backlog. 6 critical, 11 high, 23 medium findings. Total impact ~$250K/year."
+        ]
+      }
+    ]
+  }
+}

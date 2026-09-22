@@ -1,0 +1,46 @@
+{
+  "capabilities": {
+    "buildable": [
+      "synthetic-data-gen",
+      "aibi-dashboards",
+      "genie"
+    ],
+    "talking_track": [
+      "lakeflow-connect",
+      "unity-catalog",
+      "genie-code",
+      "genie-one"
+    ]
+  },
+  "created_resources": {
+    "genie_space": {
+      "id": "01f1b6a557d9128f9b7e715d762bb8aa",
+      "type": "genie_space",
+      "name": "Workspace Health Analytics",
+      "path": "/Workspace/Shared"
+    },
+    "dashboard": {
+      "id": "01f1b6a50efd1433bee40e0168ce0f0f",
+      "type": "lakeview_dashboard",
+      "name": "Workspace Health Assessment"
+    },
+    "tables": {
+      "catalog": "solution_builder",
+      "schema": "demo_workspace_health_assessment_report",
+      "tables": [
+        "raw_ws_tables",
+        "raw_ws_pipelines",
+        "raw_ws_jobs",
+        "raw_ws_job_runs",
+        "raw_ws_audit_events",
+        "raw_ws_ml_experiments",
+        "raw_ws_ml_models",
+        "gold_health_scores",
+        "gold_bronze_table_edits",
+        "gold_pipeline_health",
+        "gold_ownership_trend",
+        "gold_remediation_backlog"
+      ]
+    }
+  }
+}
