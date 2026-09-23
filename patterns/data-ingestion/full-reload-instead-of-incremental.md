@@ -18,6 +18,13 @@ point it's load-bearing production code that's expensive to change.
 
 ## Impact
 
+Databricks' own guidance is blunt about this: *"Full reloads — where the
+entire source dataset is re-read and rewritten on every run — are simple to
+implement but scale poorly."* Organizations that migrated from full reloads
+to incremental streaming have reported cost reductions of 50% or more even
+as data volumes grew tenfold, since incremental patterns keep processing
+cost roughly constant regardless of total table size.
+
 - Run time and compute cost scale with total source size, not with how much
   actually changed — a job that took 5 minutes at launch can take hours a
   year later, on the same schedule.
@@ -54,4 +61,5 @@ adoption of Auto Loader / Lakeflow Connect.
 
 ## References
 
-- <https://docs.databricks.com/ingestion/auto-loader/index.html>
+- [Data Pipeline Best Practices (Databricks Blog)](https://www.databricks.com/blog/data-pipeline-best-practices)
+- [What is Auto Loader?](https://docs.databricks.com/aws/en/ingestion/cloud-object-storage/auto-loader/)

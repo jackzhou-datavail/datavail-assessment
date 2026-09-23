@@ -30,16 +30,30 @@ first version of the pipeline didn't need it.
 ## How to fix
 
 1. Use Auto Loader's schema inference **with** an explicit
-   `cloudFiles.schemaEvolutionMode` (`addNewColumns`, `rescue`, `failOnNewColumns`,
-   or `none`) instead of the unmanaged default, and store the inferred
-   schema so it's stable across runs.
+   `cloudFiles.schemaEvolutionMode`, and store the inferred schema so it's
+   stable across runs. The five modes:
+   - `addNewColumns` (default when no schema is provided) — evolves the
+     schema, but the stream fails with `UnknownFieldException` once so it
+     can be restarted with the new schema; existing column types don't change.
+   - `addNewColumnsWithTypeWidening` — like `addNewColumns`, but also
+     auto-widens compatible type changes (e.g. `int` → `long`); genuinely
+     incompatible changes still route to rescued data.
+   - `rescue` — never evolves the schema and never fails the stream; every
+     new/mismatched field is captured in `_rescued_data` instead. Safest
+     for uptime.
+   - `failOnNewColumns` — halts processing on any schema change with no
+     automatic recovery; requires a manual schema update.
+   - `none` — ignores new columns entirely; they're silently discarded
+     unless a rescued-data column is enabled.
 2. For Lakeflow Connect / structured sources, rely on the connector's
    built-in schema-change handling rather than re-inferring per run.
-3. Add a rescued-data column (`_rescued_data`) so unexpected fields are
-   captured instead of silently dropped, and alert on it being non-empty.
-4. Define `CONSTRAINT`s or DLT expectations for the columns downstream
-   consumers actually depend on, so a breaking change fails the pipeline
-   run instead of passing through quietly.
+3. Every Auto Loader stream adds a `_rescued_data` column by default,
+   capturing unparseable fields (missing columns, type mismatches, case
+   mismatches) as a JSON blob alongside the source file path — alert on it
+   being non-empty rather than disabling it.
+4. Define `CONSTRAINT`s or Lakeflow Declarative Pipelines expectations for
+   the columns downstream consumers actually depend on, so a breaking
+   change fails the pipeline run instead of passing through quietly.
 
 ## How to detect
 
@@ -54,4 +68,4 @@ signal to go read the ingestion source, not as proof on its own.
 
 ## References
 
-- <https://docs.databricks.com/ingestion/auto-loader/schema.html>
+- [Configure schema inference and evolution in Auto Loader](https://docs.databricks.com/aws/en/ingestion/cloud-object-storage/auto-loader/schema)

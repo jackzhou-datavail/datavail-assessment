@@ -11,15 +11,21 @@ line up with what `data_collection/collect_data.py` (on the `real_data`
 branch) actually queries, so this library and the assessment tool stay
 consistent with each other.
 
+Content is verified against current Databricks documentation (linked in
+each file's References section) as of 2026-09, not written from memory
+alone — see individual files for exact source quotes.
+
 ## Categories
 
 - **[Data Ingestion](data-ingestion/)** — landing raw data into the lakehouse
   - [Auto Loader / Lakeflow Connect for incremental ingestion](data-ingestion/autoloader-incremental-ingestion.md)
   - [Idempotent ingestion via Structured Streaming checkpoints](data-ingestion/idempotent-ingestion-with-checkpoints.md)
   - [Bronze layer immutability](data-ingestion/bronze-layer-immutability.md)
+  - [Change data capture (CDC) for database ingestion](data-ingestion/change-data-capture-ingestion.md)
   - [Direct writes to bronze tables](data-ingestion/direct-writes-to-bronze-tables.md) — ⚠️ anti-pattern
   - [Full-table reload instead of incremental](data-ingestion/full-reload-instead-of-incremental.md) — ⚠️ anti-pattern
   - [Missing schema enforcement / evolution handling](data-ingestion/missing-schema-enforcement.md) — ⚠️ anti-pattern
+  - [Small-file accumulation at landing](data-ingestion/small-file-accumulation.md) — ⚠️ anti-pattern
 
 ## File template
 

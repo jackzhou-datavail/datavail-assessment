@@ -8,13 +8,21 @@ fashion, and are never the target of ad-hoc `UPDATE`, `DELETE`, or manual
 
 ## Why it matters
 
-Bronze is meant to be a faithful, replayable copy of what the source
-actually sent — the thing you fall back to when a downstream transformation
-turns out to be wrong. The moment something other than the ingestion
-pipeline can write to it, that guarantee is gone: `CONSTRAINT`s and
-expectations defined on the pipeline stop being enforced, replays from
-bronze stop being trustworthy, and every table downstream of the mutated
-one inherits a discrepancy nobody can explain from lineage alone.
+Databricks' own medallion architecture documentation describes the bronze
+layer as containing and maintaining "the raw state of the data source in
+its original formats," serving as "the single source of truth, preserving
+the data's fidelity," and enabling "reprocessing and auditing by retaining
+all historical data." A Databricks engineering blog on pipeline best
+practices is more direct still, recommending "immutable raw landing zones
+before any transformation occurs."
+
+"Immutable" is the term the practitioner community uses for this property;
+the underlying documented reasoning is the one above. The moment something
+other than the ingestion pipeline can write to bronze, that guarantee is
+gone: `CONSTRAINT`s and expectations defined on the pipeline stop being
+enforced, replays from bronze stop being trustworthy, and every table
+downstream of the mutated one inherits a discrepancy nobody can explain
+from lineage alone.
 
 ## What good looks like
 
@@ -40,4 +48,5 @@ anti-pattern — see
 
 ## References
 
-- <https://docs.databricks.com/lakehouse/medallion.html>
+- [What is the medallion lakehouse architecture?](https://docs.databricks.com/aws/en/lakehouse/medallion)
+- [Data Pipeline Best Practices (Databricks Blog)](https://www.databricks.com/blog/data-pipeline-best-practices)

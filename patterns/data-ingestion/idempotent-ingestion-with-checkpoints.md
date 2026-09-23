@@ -19,7 +19,17 @@ throwing an error anyone notices.
 
 - Structured Streaming (including Auto Loader) writes its checkpoint to a
   durable location (a UC volume or cloud storage path) that is never shared
-  between two different streams and is never deleted casually.
+  between two different streams and is never deleted casually. A checkpoint
+  directory holds **offsets** (source positions already processed, so a
+  restart resumes exactly where it left off), **commits** (which
+  micro-batches reached the sink, enabling exactly-once semantics), **state**
+  (for stateful operations like aggregations/joins), and query **metadata**.
+- Certain changes break checkpoint compatibility and force a fresh start —
+  changing the input source type/count, or the schema of a stateful
+  operation (aggregation, join, dedup) — so those are treated as
+  deliberate, reviewed changes, not casual edits. Deleting the checkpoint or
+  pointing at a new location silently restarts the query from scratch with
+  no error.
 - Batch ingestion that can't use a streaming checkpoint uses an equivalent
   idempotency key — `MERGE` on a natural/source key, or a `WHERE NOT EXISTS`
   guard — so re-running the same batch is a no-op the second time.
@@ -39,5 +49,6 @@ manually; not something system tables expose directly).
 
 ## References
 
-- <https://docs.databricks.com/structured-streaming/query-recovery.html>
-- <https://docs.databricks.com/delta/merge.html>
+- [Structured Streaming checkpoints](https://docs.databricks.com/aws/en/structured-streaming/checkpoints)
+- [Production considerations for Structured Streaming](https://docs.databricks.com/aws/en/structured-streaming/production)
+- [Upsert into a Delta Lake table using merge](https://docs.databricks.com/aws/en/delta/merge)
