@@ -27,6 +27,25 @@ alone — see individual files for exact source quotes.
   - [Missing schema enforcement / evolution handling](data-ingestion/missing-schema-enforcement.md) — ⚠️ anti-pattern
   - [Small-file accumulation at landing](data-ingestion/small-file-accumulation.md) — ⚠️ anti-pattern
 
+- **[Unity Catalog Governance](unity-catalog-governance/)** — organizing, securing, and auditing data in UC
+  - [Catalogs as the primary unit of isolation](unity-catalog-governance/domain-catalog-organization.md)
+  - [Group-based access control & ownership](unity-catalog-governance/group-based-access-control.md)
+  - [ABAC with governed tags](unity-catalog-governance/abac-governed-tags.md)
+  - [Automated sensitive-data classification](unity-catalog-governance/automated-pii-classification.md)
+  - [Lineage & audit logging via system tables](unity-catalog-governance/lineage-and-audit-via-system-tables.md)
+  - [Direct grants to individual users](unity-catalog-governance/individual-user-grants.md) — ⚠️ anti-pattern
+  - [Continued use of the legacy Hive metastore](unity-catalog-governance/legacy-hive-metastore-usage.md) — ⚠️ anti-pattern
+  - [Unowned / never-reassigned catalog objects](unity-catalog-governance/unowned-catalog-objects.md) — ⚠️ anti-pattern
+  - [Unclassified sensitive data](unity-catalog-governance/unclassified-sensitive-data.md) — ⚠️ anti-pattern
+
+- **[Table Optimization](table-optimization/)** — Delta table layout and maintenance
+  - [Liquid clustering instead of manual partitioning/Z-ORDER](table-optimization/liquid-clustering-over-partitioning.md)
+  - [Predictive optimization for table maintenance](table-optimization/predictive-optimization-autopilot.md)
+  - [Deletion vectors for fast UPDATE/DELETE/MERGE](table-optimization/deletion-vectors-for-fast-dml.md)
+  - [Over-partitioning](table-optimization/over-partitioning.md) — ⚠️ anti-pattern
+  - [Unmanaged VACUUM retention](table-optimization/unmanaged-vacuum-retention.md) — ⚠️ anti-pattern
+  - [Stale or missing table statistics](table-optimization/stale-table-statistics.md) — ⚠️ anti-pattern
+
 ## File template
 
 ```markdown
