@@ -47,8 +47,8 @@ if IN_NOTEBOOK:
     CATALOG = dbutils.widgets.get("catalog")
     SCHEMA = dbutils.widgets.get("schema")
 else:
-    CATALOG = os.environ.get("DEMO_CATALOG", "solution_builder")
-    SCHEMA = os.environ.get("DEMO_SCHEMA", "demo_workspace_health_assessment_report")
+    CATALOG = os.environ.get("DEMO_CATALOG", "main")
+    SCHEMA = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
 
 assert CATALOG and SCHEMA, "DEMO_CATALOG and DEMO_SCHEMA must be set"
 

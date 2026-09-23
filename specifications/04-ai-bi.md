@@ -18,7 +18,7 @@ Create **`Workspace Health Analytics`** Genie Space.
 
 ### Tables
 
-All in `solution_builder.demo_workspace_health_assessment_report`:
+All in `<catalog>.<schema>` (the target catalog/schema passed at deploy time):
 - `gold_bronze_table_edits` — the 14 bronze tables with direct DML, costs, downstream impact
 - `gold_remediation_backlog` — all 40 findings ranked by severity
 - `gold_health_scores` — daily scores per dimension (trend + current state)

@@ -14,19 +14,19 @@
   },
   "created_resources": {
     "genie_space": {
-      "id": "01f1b6a557d9128f9b7e715d762bb8aa",
+      "id": "<genie-space-id>",
       "type": "genie_space",
       "name": "Workspace Health Analytics",
       "path": "/Workspace/Shared"
     },
     "dashboard": {
-      "id": "01f1b6a50efd1433bee40e0168ce0f0f",
+      "id": "<dashboard-id>",
       "type": "lakeview_dashboard",
       "name": "Workspace Health Assessment"
     },
     "tables": {
-      "catalog": "solution_builder",
-      "schema": "demo_workspace_health_assessment_report",
+      "catalog": "<your-catalog>",
+      "schema": "<your-schema>",
       "tables": [
         "raw_ws_tables",
         "raw_ws_pipelines",

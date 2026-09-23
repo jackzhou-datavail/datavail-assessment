@@ -27,9 +27,9 @@ SPACE_DESCRIPTION = (
     "or the full remediation backlog."
 )
 
-# The catalog.schema baked into the committed genie_space.json.
+# The catalog.schema placeholder baked into the committed genie_space.json.
 # Literal-replace at deploy time so the same JSON works on any catalog/schema.
-SRC_QUALIFIER = "solution_builder.demo_workspace_health_assessment_report"
+SRC_QUALIFIER = "__CATALOG__.__SCHEMA__"
 
 # COMMAND ----------
 

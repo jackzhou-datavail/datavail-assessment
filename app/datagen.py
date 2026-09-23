@@ -8,9 +8,9 @@ from datetime import date, timedelta, datetime
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState, ExecuteStatementRequestOnWaitTimeout
 
-CATALOG = "solution_builder"
-SCHEMA  = "demo_workspace_health_assessment_report"
-WAREHOUSE_ID = "5c7c72ebf856f7c4"
+CATALOG = os.environ.get("DEMO_CATALOG", "main")
+SCHEMA  = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
+WAREHOUSE_ID = os.environ.get("DEMO_WAREHOUSE_ID", "")
 TODAY = date.today()
 
 def sql(w, statement, wait=True):

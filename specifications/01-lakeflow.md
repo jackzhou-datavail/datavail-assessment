@@ -6,7 +6,7 @@
 
 ## Shared Context
 
-**Catalog / Schema**: `solution_builder.demo_workspace_health_assessment_report`
+**Catalog / Schema**: `<catalog>.<schema>` (the target catalog/schema passed at deploy time)
 
 **Story anchor — the single biggest signal in the data:**
 - `raw_transactions` (a bronze table) has **47 direct DML writes** in 90 days — the tallest bar on the ETL Hygiene chart and the one Genie leads with.
@@ -33,7 +33,7 @@
 
 **Runtime**: pre-provisioned databricks-connect venv. Do NOT create a new venv.
 
-One idempotent Python script. All tables written to `solution_builder.demo_workspace_health_assessment_report`. Script is structured in three sections:
+One idempotent Python script. All tables written to `<catalog>.<schema>`. Script is structured in three sections:
 
 1. **Raw tables** — workspace metadata simulation (tables, pipelines, jobs, job runs, audit events, ML assets)
 2. **Intermediate aggregations** — pre-compute derived signals needed for gold (inline `spark.sql`)

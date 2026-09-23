@@ -5,9 +5,9 @@
 # No Databricks App. No Lakebase.
 #
 # ── 2-command deploy ───────────────────────────────────────────────────────
-#   1. databricks bundle deploy  --var catalog=solution_builder \
-#                                --var schema=demo_workspace_health_assessment_report \
-#                                --var warehouse_id=5c7c72ebf856f7c4
+#   1. databricks bundle deploy  --var catalog=<your-catalog> \
+#                                --var schema=<your-schema> \
+#                                --var warehouse_id=<your-warehouse-id>
 #   2. databricks bundle run workspace_health_setup  --var ...
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -17,13 +17,12 @@ bundle:
 variables:
   catalog:
     description: "Unity Catalog for demo resources"
-    default: "solution_builder"
+    default: "main"
   schema:
     description: "Schema within the catalog"
-    default: "demo_workspace_health_assessment_report"
+    default: "workspace_health_assessment"
   warehouse_id:
-    description: "SQL Warehouse ID — powers the dashboard + Genie space"
-    default: "5c7c72ebf856f7c4"
+    description: "SQL Warehouse ID — powers the dashboard + Genie space (no default: pass --var warehouse_id=<id>)"
 
 sync:
   include:

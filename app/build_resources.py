@@ -6,9 +6,9 @@ Saves resource IDs to /tmp/resource_ids.json for pickup by the parent process.
 import os, sys, json, time
 from databricks.sdk import WorkspaceClient
 
-CATALOG = "solution_builder"
-SCHEMA  = "demo_workspace_health_assessment_report"
-WAREHOUSE_ID = "5c7c72ebf856f7c4"
+CATALOG = os.environ.get("DEMO_CATALOG", "main")
+SCHEMA  = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
+WAREHOUSE_ID = os.environ.get("DEMO_WAREHOUSE_ID", "")
 FQ = f"{CATALOG}.{SCHEMA}"
 
 def get_client():

@@ -43,7 +43,7 @@
   "data_sources": {
     "tables": [
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_bronze_table_edits",
+        "identifier": "__CATALOG__.__SCHEMA__.gold_bronze_table_edits",
         "column_configs": [
           {
             "column_name": "downstream_gold_tables",
@@ -90,7 +90,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_health_scores",
+        "identifier": "__CATALOG__.__SCHEMA__.gold_health_scores",
         "column_configs": [
           {
             "column_name": "dimension",
@@ -124,7 +124,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_ownership_trend",
+        "identifier": "__CATALOG__.__SCHEMA__.gold_ownership_trend",
         "column_configs": [
           {
             "column_name": "ownership_coverage_pct",
@@ -140,7 +140,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_pipeline_health",
+        "identifier": "__CATALOG__.__SCHEMA__.gold_pipeline_health",
         "column_configs": [
           {
             "column_name": "failure_rate_30d",
@@ -176,7 +176,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.gold_remediation_backlog",
+        "identifier": "__CATALOG__.__SCHEMA__.gold_remediation_backlog",
         "column_configs": [
           {
             "column_name": "asset_name",
@@ -217,7 +217,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.raw_ws_audit_events",
+        "identifier": "__CATALOG__.__SCHEMA__.raw_ws_audit_events",
         "column_configs": [
           {
             "column_name": "action_type",
@@ -250,7 +250,7 @@
         ]
       },
       {
-        "identifier": "solution_builder.demo_workspace_health_assessment_report.raw_ws_ml_models",
+        "identifier": "__CATALOG__.__SCHEMA__.raw_ws_ml_models",
         "column_configs": [
           {
             "column_name": "is_serving_stale_features",
@@ -321,7 +321,7 @@
           "Which bronze tables have the most direct edits and what is the total rerun cost?"
         ],
         "sql": [
-          "SELECT gold_bronze_table_edits.table_name, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.severity, gold_bronze_table_edits.downstream_gold_tables, gold_bronze_table_edits.estimated_rerun_cost_usd FROM `solution_builder.demo_workspace_health_assessment_report`.`gold_bronze_table_edits` ORDER BY gold_bronze_table_edits.edit_count_90d DESC"
+          "SELECT gold_bronze_table_edits.table_name, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.severity, gold_bronze_table_edits.downstream_gold_tables, gold_bronze_table_edits.estimated_rerun_cost_usd FROM `__CATALOG__.__SCHEMA__`.`gold_bronze_table_edits` ORDER BY gold_bronze_table_edits.edit_count_90d DESC"
         ],
         "usage_guidance": [
           "Use this for the primary bronze-edit cost analysis. The SUM of estimated_rerun_cost_usd = $87K/year."
@@ -333,7 +333,7 @@
           "Which ML models are serving stale features and which bronze table caused the staleness?"
         ],
         "sql": [
-          "WITH stale_models AS (SELECT raw_ws_ml_models.model_name, raw_ws_ml_models.serving_endpoint_name, raw_ws_ml_models.upstream_features_table, raw_ws_ml_models.features_last_modified_date FROM `solution_builder.demo_workspace_health_assessment_report`.`raw_ws_ml_models` WHERE raw_ws_ml_models.is_serving_stale_features = TRUE) SELECT stale_models.model_name, stale_models.serving_endpoint_name, stale_models.upstream_features_table, stale_models.features_last_modified_date, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.estimated_rerun_cost_usd FROM stale_models LEFT JOIN `solution_builder.demo_workspace_health_assessment_report`.`gold_bronze_table_edits` ON stale_models.upstream_features_table = gold_bronze_table_edits.table_name"
+          "WITH stale_models AS (SELECT raw_ws_ml_models.model_name, raw_ws_ml_models.serving_endpoint_name, raw_ws_ml_models.upstream_features_table, raw_ws_ml_models.features_last_modified_date FROM `__CATALOG__.__SCHEMA__`.`raw_ws_ml_models` WHERE raw_ws_ml_models.is_serving_stale_features = TRUE) SELECT stale_models.model_name, stale_models.serving_endpoint_name, stale_models.upstream_features_table, stale_models.features_last_modified_date, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.estimated_rerun_cost_usd FROM stale_models LEFT JOIN `__CATALOG__.__SCHEMA__`.`gold_bronze_table_edits` ON stale_models.upstream_features_table = gold_bronze_table_edits.table_name"
         ],
         "usage_guidance": [
           "Cross-table join: connects ML model staleness to the bronze table edits that caused it. Returns exactly 2 models."
@@ -345,7 +345,7 @@
           "Show the full remediation backlog ranked by severity and business impact"
         ],
         "sql": [
-          "SELECT gold_remediation_backlog.finding_id, gold_remediation_backlog.severity, gold_remediation_backlog.category, gold_remediation_backlog.asset_type, gold_remediation_backlog.asset_name, gold_remediation_backlog.owner_email, gold_remediation_backlog.description, gold_remediation_backlog.business_impact_usd, gold_remediation_backlog.recommended_action, gold_remediation_backlog.sprint_estimate_days FROM `solution_builder.demo_workspace_health_assessment_report`.`gold_remediation_backlog` ORDER BY CASE gold_remediation_backlog.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, gold_remediation_backlog.business_impact_usd DESC"
+          "SELECT gold_remediation_backlog.finding_id, gold_remediation_backlog.severity, gold_remediation_backlog.category, gold_remediation_backlog.asset_type, gold_remediation_backlog.asset_name, gold_remediation_backlog.owner_email, gold_remediation_backlog.description, gold_remediation_backlog.business_impact_usd, gold_remediation_backlog.recommended_action, gold_remediation_backlog.sprint_estimate_days FROM `__CATALOG__.__SCHEMA__`.`gold_remediation_backlog` ORDER BY CASE gold_remediation_backlog.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, gold_remediation_backlog.business_impact_usd DESC"
         ],
         "usage_guidance": [
           "Sprint-planning backlog. 6 critical, 11 high, 23 medium findings. Total impact ~$250K/year."

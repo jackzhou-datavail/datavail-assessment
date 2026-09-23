@@ -14,17 +14,17 @@ A single Databricks Asset Bundle (DAB) that builds one demo: **"Workspace Health
 # Validate the bundle
 databricks bundle validate
 
-# Deploy resources (dashboard) — variables have defaults in databricks.yml
+# Deploy resources (dashboard) — catalog/schema have generic defaults in databricks.yml; warehouse_id is required
 databricks bundle deploy \
-  --var catalog=solution_builder \
-  --var schema=demo_workspace_health_assessment_report \
-  --var warehouse_id=5c7c72ebf856f7c4
+  --var catalog=<your-catalog> \
+  --var schema=<your-schema> \
+  --var warehouse_id=<your-warehouse-id>
 
 # Run the setup job: generates all 12 UC tables, then deploys/updates the Genie space
 databricks bundle run workspace_health_setup \
-  --var catalog=solution_builder \
-  --var schema=demo_workspace_health_assessment_report \
-  --var warehouse_id=5c7c72ebf856f7c4
+  --var catalog=<your-catalog> \
+  --var schema=<your-schema> \
+  --var warehouse_id=<your-warehouse-id>
 
 # Tear down (removes dashboard + job only — does NOT drop UC tables or the Genie space)
 databricks bundle destroy

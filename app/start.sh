@@ -6,8 +6,8 @@ python3 - << PYEOF
 import os, http.server, socketserver, json
 
 RESOURCES = {
-    "genie_space_id": "01f1b6a557d9128f9b7e715d762bb8aa",
-    "dashboard_id":   "01f1b6a50efd1433bee40e0168ce0f0f"
+    "genie_space_id": os.environ.get("GENIE_SPACE_ID", ""),
+    "dashboard_id":   os.environ.get("DASHBOARD_ID", "")
 }
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -18,8 +18,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({
             "status": "success",
             "message": "All resources built and ready.",
-            "catalog": "solution_builder",
-            "schema": "demo_workspace_health_assessment_report",
+            "catalog": os.environ.get("DEMO_CATALOG", "main"),
+            "schema": os.environ.get("DEMO_SCHEMA", "workspace_health_assessment"),
             "resources": RESOURCES,
         }, indent=2).encode())
     def log_message(self, *args): pass

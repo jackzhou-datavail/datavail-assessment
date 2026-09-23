@@ -3,8 +3,8 @@
 ## Prerequisites
 
 - Databricks CLI installed and authenticated (`databricks auth login` or a configured profile)
-- Catalog `solution_builder` and schema `demo_workspace_health_assessment_report` accessible
-- SQL Warehouse `5c7c72ebf856f7c4` available (or substitute your own)
+- A Unity Catalog catalog and schema you own or have `CREATE`/`USE SCHEMA` privileges on (the schema will be created if it doesn't exist)
+- A SQL Warehouse ID available in your workspace
 
 ## 2-Command Deploy
 
@@ -12,9 +12,9 @@
 
 ```bash
 databricks bundle deploy \
-  --var catalog=solution_builder \
-  --var schema=demo_workspace_health_assessment_report \
-  --var warehouse_id=5c7c72ebf856f7c4
+  --var catalog=<your-catalog> \
+  --var schema=<your-schema> \
+  --var warehouse_id=<your-warehouse-id>
 ```
 
 This creates / updates:
@@ -24,9 +24,9 @@ This creates / updates:
 
 ```bash
 databricks bundle run workspace_health_setup \
-  --var catalog=solution_builder \
-  --var schema=demo_workspace_health_assessment_report \
-  --var warehouse_id=5c7c72ebf856f7c4
+  --var catalog=<your-catalog> \
+  --var schema=<your-schema> \
+  --var warehouse_id=<your-warehouse-id>
 ```
 
 The setup job runs two tasks in sequence:
@@ -77,11 +77,4 @@ This removes the dashboard and setup job. **Does NOT delete the UC tables or Gen
 
 ## Already-Deployed Resources (pre-built)
 
-These IDs are in `resources.json` and were created during the initial build session:
-
-| Resource | ID |
-|----------|----|
-| Genie Space | `01f1b6a557d9128f9b7e715d762bb8aa` |
-| Dashboard | `01f1b6a50efd1433bee40e0168ce0f0f` |
-
-For a fresh deployment the setup job will create new IDs in the target workspace.
+`resources.json` records the resource IDs from the most recent build session (genie space, dashboard, table list) — informational only, not consumed by the bundle. For a fresh deployment the setup job will create new IDs in the target workspace.
