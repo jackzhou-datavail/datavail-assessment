@@ -88,7 +88,7 @@
             "name": "page1_title",
             "multilineTextboxSpec": {
               "lines": [
-                "## Workspace Health Assessment\n",
+                "## Datavail Assessment\n",
                 "\n",
                 "Overall score, four dimension breakdowns, and the top critical findings driving them.\n",
                 "\n",
@@ -134,7 +134,7 @@
                 "showTitle": true,
                 "title": "Overall Health Score",
                 "showDescription": true,
-                "description": "0-100 workspace health score"
+                "description": "0-100 Datavail Assessment score"
               }
             }
           },

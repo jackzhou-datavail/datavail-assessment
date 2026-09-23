@@ -1,5 +1,5 @@
 """
-Workspace Health Assessment — Data Generation Script
+Datavail Assessment — Data Generation Script
 Runs inside the preview app container where M2M credentials are available.
 Uses SQL Statements API to create and populate all tables.
 """
@@ -9,7 +9,7 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState, ExecuteStatementRequestOnWaitTimeout
 
 CATALOG = os.environ.get("DEMO_CATALOG", "main")
-SCHEMA  = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
+SCHEMA  = os.environ.get("DEMO_SCHEMA", "assessment_data")
 WAREHOUSE_ID = os.environ.get("DEMO_WAREHOUSE_ID", "")
 TODAY = date.today()
 
@@ -171,7 +171,7 @@ def main():
         pass
     try:
         w.schemas.create(catalog_name=CATALOG, name=SCHEMA,
-                         comment="Workspace Health Assessment demo")
+                         comment="Datavail Assessment demo")
         print("Schema created by M2M SP (owner)", flush=True)
     except Exception as e:
         if "already exists" in str(e).lower():

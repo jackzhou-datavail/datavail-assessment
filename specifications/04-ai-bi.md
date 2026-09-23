@@ -14,7 +14,7 @@ Tables and columns referenced here are defined in `01-lakeflow.md`. Gold tables 
 
 **Skill to use**: `databricks-genie` — read `SKILLS/databricks-genie-agents/SKILL.md` before implementing.
 
-Create **`Workspace Health Analytics`** Genie Space.
+Create **`Datavail Assessment Analytics`** Genie Space.
 
 ### Tables
 
@@ -29,16 +29,16 @@ All in `<catalog>.<schema>` (the target catalog/schema passed at deploy time):
 
 ### Self-sufficient room
 
-Anyone opening the Genie room must understand the workspace health context without prior briefing.
+Anyone opening the Genie room must understand the Datavail Assessment context without prior briefing.
 
-- **Space description**: "Workspace health analytics for the engineering team. Overall score: 68/100. Top risk: 14 bronze tables have been directly edited in the past 90 days — bypassing pipeline expectations and causing cascading failures worth ~$87K/year. Ask about bronze table violations, pipeline ownership gaps, ML model risks, or the full remediation backlog."
+- **Space description**: "Datavail assessment analytics for the engineering team. Overall score: 68/100. Top risk: 14 bronze tables have been directly edited in the past 90 days — bypassing pipeline expectations and causing cascading failures worth ~$87K/year. Ask about bronze table violations, pipeline ownership gaps, ML model risks, or the full remediation backlog."
 - **Story-context `text_instruction`** at the TOP of instructions: describe the workspace context, what the scores mean, the baseline metrics, and the investigation flow.
 - **`sample_questions`** chips + matching `example_question_sqls` walk the story arc end-to-end.
 
 ### Instructions
 
 ```
-You analyze Databricks workspace health data for Alex (Head of Data Engineering) and their engineering team.
+You analyze Datavail Assessment data for Alex (Head of Data Engineering) and their engineering team.
 
 CONTEXT:
 - Workspace overall health score: 68/100 (was 71 thirty days ago)
@@ -78,7 +78,7 @@ COST CALCULATIONS:
 ### Sample Questions — story-arc walk
 
 **Chips (all 6, in arc order):**
-1. **Score** — "What is the current workspace health score and which dimension is worst?"
+1. **Score** — "What is the current Datavail Assessment score and which dimension is worst?"
 2. **Bronze edits** — "Which bronze tables have been directly modified, and what is the estimated annual cost of cascading failures?"
 3. **ML risk** — "Which ML models are serving features from tables that had direct writes in the last 30 days?"
 4. **Ownership** — "Which production pipelines have no owner tag?"
@@ -92,7 +92,7 @@ COST CALCULATIONS:
 
 ### Validation
 
-- "What is the workspace health score?" → returns 68 for overall, confirms ETL Hygiene (55) is worst.
+- "What is the Datavail Assessment score?" → returns 68 for overall, confirms ETL Hygiene (55) is worst.
 - "Which bronze tables have been directly modified?" → `raw_transactions` leads with 47 edits; total cost ≈ $87K/year.
 - "Which ML models are serving stale features?" → exactly 2 models returned, with their serving endpoints and the upstream bronze table named.
 - "Which production pipelines have no owner?" → 9 pipelines; `customer_churn_etl` in the list.
@@ -106,7 +106,7 @@ Add `genie_space_id` to `resources.json`.
 
 **Skill to use**: `databricks-aibi-dashboards` — read `SKILLS/databricks-aibi-dashboards/SKILL.md` before implementing. The skill owns the JSON shape and encoding rules; this spec is WHAT, not HOW.
 
-Create **`Workspace Health Assessment`** dashboard. Save locally as `PROJECT/dashboard.json`. Link the Genie space from section A.
+Create **`Datavail Assessment`** dashboard. Save locally as `PROJECT/dashboard.json`. Link the Genie space from section A.
 
 ### Design principles
 

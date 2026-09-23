@@ -16,13 +16,13 @@
     "genie_space": {
       "id": "<genie-space-id>",
       "type": "genie_space",
-      "name": "Workspace Health Analytics",
+      "name": "Datavail Assessment Analytics",
       "path": "/Workspace/Shared"
     },
     "dashboard": {
       "id": "<dashboard-id>",
       "type": "lakeview_dashboard",
-      "name": "Workspace Health Assessment"
+      "name": "Datavail Assessment"
     },
     "tables": {
       "catalog": "<your-catalog>",

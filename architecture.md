@@ -1,8 +1,8 @@
 ```json
 [
   {
-    "name": "Workspace Health Assessment",
-    "story": "Unity Catalog system tables ingested via Lakeflow Connect → declarative medallion pipeline → governed lakehouse → AI/BI Dashboard (68/100 health score) + Genie Agent for NL workspace analysis → Genie One for engineering managers.",
+    "name": "Datavail Assessment",
+    "story": "Unity Catalog system tables ingested via Lakeflow Connect → declarative medallion pipeline → governed lakehouse → AI/BI Dashboard (68/100 assessment score) + Genie Agent for NL workspace analysis → Genie One for engineering managers.",
     "columns": [
       "sources",
       "pipeline",

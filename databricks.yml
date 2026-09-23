@@ -1,4 +1,4 @@
-# Databricks Asset Bundle — Workspace Health Assessment Demo
+# Databricks Asset Bundle — Datavail Assessment Demo
 #
 # Provisions: AI/BI Dashboard + setup job (data gen → Genie deploy).
 # No SDP pipeline (data generated via Python SDK).
@@ -8,11 +8,11 @@
 #   1. databricks bundle deploy  --var catalog=<your-catalog> \
 #                                --var schema=<your-schema> \
 #                                --var warehouse_id=<your-warehouse-id>
-#   2. databricks bundle run workspace_health_setup  --var ...
+#   2. databricks bundle run datavail_assessment_setup  --var ...
 # ──────────────────────────────────────────────────────────────────────────
 
 bundle:
-  name: workspace-health-assessment
+  name: datavail-assessment
 
 variables:
   catalog:
@@ -20,7 +20,7 @@ variables:
     default: "main"
   schema:
     description: "Schema within the catalog"
-    default: "workspace_health_assessment"
+    default: "assessment_data"
   warehouse_id:
     description: "SQL Warehouse ID — powers the dashboard + Genie space (no default: pass --var warehouse_id=<id>)"
 
@@ -45,8 +45,8 @@ resources:
   # dataset_catalog / dataset_schema rebind the embedded queries per-target.
   # ──────────────────────────────────────────────────────────────────────────
   dashboards:
-    workspace_health_dashboard:
-      display_name: "[${bundle.target}] Workspace Health Assessment"
+    datavail_assessment_dashboard:
+      display_name: "[${bundle.target}] Datavail Assessment"
       file_path: ./src/dashboard/dashboard.json
       warehouse_id: ${var.warehouse_id}
       dataset_catalog: ${var.catalog}
@@ -58,8 +58,8 @@ resources:
   #   deploy_genie    → creates / updates the Genie space (not declarable)
   # ──────────────────────────────────────────────────────────────────────────
   jobs:
-    workspace_health_setup:
-      name: "[${bundle.target}] Workspace Health Setup"
+    datavail_assessment_setup:
+      name: "[${bundle.target}] Datavail Assessment Setup"
       description: "generate synthetic data → deploy Genie space"
       tasks:
         - task_key: generate_data

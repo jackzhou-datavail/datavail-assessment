@@ -1,4 +1,4 @@
-# DAB Deploy Instructions — Workspace Health Assessment
+# DAB Deploy Instructions — Datavail Assessment
 
 ## Prerequisites
 
@@ -18,12 +18,12 @@ databricks bundle deploy \
 ```
 
 This creates / updates:
-- **AI/BI Dashboard** — "Workspace Health Assessment" (from `src/dashboard/dashboard.json`)
+- **AI/BI Dashboard** — "Datavail Assessment" (from `src/dashboard/dashboard.json`)
 
 ### Step 2 — Run setup job
 
 ```bash
-databricks bundle run workspace_health_setup \
+databricks bundle run datavail_assessment_setup \
   --var catalog=<your-catalog> \
   --var schema=<your-schema> \
   --var warehouse_id=<your-warehouse-id>
@@ -31,7 +31,7 @@ databricks bundle run workspace_health_setup \
 
 The setup job runs two tasks in sequence:
 1. **`generate_data`** — generates synthetic workspace metadata into the UC tables (12 tables: 7 raw + 5 gold)
-2. **`deploy_genie`** — creates / updates the "Workspace Health Analytics" Genie space
+2. **`deploy_genie`** — creates / updates the "Datavail Assessment Analytics" Genie space
 
 ## Deploy to a Different Catalog / Schema
 
@@ -43,7 +43,7 @@ databricks bundle deploy \
   --var schema=my_schema \
   --var warehouse_id=<my_warehouse_id>
 
-databricks bundle run workspace_health_setup \
+databricks bundle run datavail_assessment_setup \
   --var catalog=my_catalog \
   --var schema=my_schema \
   --var warehouse_id=<my_warehouse_id>

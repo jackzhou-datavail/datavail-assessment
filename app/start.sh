@@ -19,7 +19,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "status": "success",
             "message": "All resources built and ready.",
             "catalog": os.environ.get("DEMO_CATALOG", "main"),
-            "schema": os.environ.get("DEMO_SCHEMA", "workspace_health_assessment"),
+            "schema": os.environ.get("DEMO_SCHEMA", "assessment_data"),
             "resources": RESOURCES,
         }, indent=2).encode())
     def log_message(self, *args): pass

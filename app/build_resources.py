@@ -7,7 +7,7 @@ import os, sys, json, time
 from databricks.sdk import WorkspaceClient
 
 CATALOG = os.environ.get("DEMO_CATALOG", "main")
-SCHEMA  = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
+SCHEMA  = os.environ.get("DEMO_SCHEMA", "assessment_data")
 WAREHOUSE_ID = os.environ.get("DEMO_WAREHOUSE_ID", "")
 FQ = f"{CATALOG}.{SCHEMA}"
 
@@ -29,7 +29,7 @@ GENIE_SERIALIZED = {
         "sample_questions": [
             {
                 "id": "10000000000000000000000000000001",
-                "question": ["What is the current workspace health score and which dimension is worst?"]
+                "question": ["What is the current Datavail Assessment score and which dimension is worst?"]
             },
             {
                 "id": "10000000000000000000000000000002",
@@ -130,7 +130,7 @@ GENIE_SERIALIZED = {
                 "id": "30000000000000000000000000000001",
                 "content": [
                     "## PURPOSE",
-                    "- Answer workspace health questions for Alex Chen (Head of Data Engineering) and their engineering team.",
+                    "- Answer Datavail Assessment questions for Alex Chen (Head of Data Engineering) and their engineering team.",
                     "- This workspace has a 68/100 health score (was 71 thirty days ago). ETL Hygiene (55) is the worst dimension.",
 
                     "## DISAMBIGUATION",
@@ -147,7 +147,7 @@ GENIE_SERIALIZED = {
                     "- gold_ownership_trend covers 30 days; ownership_coverage_pct goes from ~58% to ~69%.",
 
                     "## Instructions you must follow when providing summaries",
-                    "- Always state the total at-risk amount ($250K/year) when summarizing workspace health.",
+                    "- Always state the total at-risk amount ($250K/year) when summarizing the Datavail Assessment.",
                     "- When quoting bronze table edit costs, confirm the total is $87K/year.",
                     "- Round percentages to one decimal place."
                 ]
@@ -184,7 +184,7 @@ GENIE_SERIALIZED = {
 
 
 def build_genie_space(host, w):
-    """Create the Workspace Health Analytics Genie space."""
+    """Create the Datavail Assessment Analytics Genie space."""
     print("\n=== Building Genie Space ===", flush=True)
 
     # Try to ensure workspace path exists (failure is non-fatal)
@@ -199,8 +199,8 @@ def build_genie_space(host, w):
 
     payload = {
         "warehouse_id": WAREHOUSE_ID,
-        "title": "Workspace Health Analytics",
-        "description": "Workspace health analytics for the engineering team. Overall score: 68/100. Top risk: 14 bronze tables have been directly edited in the past 90 days — bypassing pipeline expectations and causing cascading failures worth ~$87K/year. Ask about bronze table violations, pipeline ownership gaps, ML model risks, or the full remediation backlog.",
+        "title": "Datavail Assessment Analytics",
+        "description": "Datavail assessment analytics for the engineering team. Overall score: 68/100. Top risk: 14 bronze tables have been directly edited in the past 90 days — bypassing pipeline expectations and causing cascading failures worth ~$87K/year. Ask about bronze table violations, pipeline ownership gaps, ML model risks, or the full remediation backlog.",
         "parent_path": workspace_path,
         "serialized_space": json.dumps(GENIE_SERIALIZED)
     }
@@ -219,7 +219,7 @@ def build_genie_space(host, w):
             try:
                 lst = w.api_client.do("GET", "/api/2.0/genie/spaces")
                 for s in lst.get("spaces", []):
-                    if s.get("title") == "Workspace Health Analytics":
+                    if s.get("title") == "Datavail Assessment Analytics":
                         space_id = s.get("space_id") or s.get("id")
                         print(f"  Found existing space: {space_id}", flush=True)
                         break
@@ -238,12 +238,12 @@ def build_genie_space(host, w):
 # ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
 def build_dashboard(host, w, genie_space_id=None):
-    """Create the Workspace Health Assessment AI/BI Dashboard."""
+    """Create the Datavail Assessment AI/BI Dashboard."""
     print("\n=== Building Dashboard ===", flush=True)
 
     # Build the dashboard JSON per spec
     dashboard_spec = {
-        "display_name": "Workspace Health Assessment",
+        "display_name": "Datavail Assessment",
         "serialized_dashboard": json.dumps(build_dashboard_json(genie_space_id))
     }
 
@@ -262,7 +262,7 @@ def build_dashboard(host, w, genie_space_id=None):
             try:
                 lst = w.api_client.do("GET", "/api/2.0/lakeview/dashboards")
                 for d in lst.get("dashboards", []):
-                    if d.get("display_name") == "Workspace Health Assessment":
+                    if d.get("display_name") == "Datavail Assessment":
                         dashboard_id = d.get("dashboard_id")
                         print(f"  Found existing dashboard: {dashboard_id}", flush=True)
                         break
@@ -339,7 +339,7 @@ def build_page1(T):
         widget("page1_title", layout(0,0,12,3), {
             "type": "text",
             "text": {
-                "content": "## Workspace Health Assessment\n\n**Overall Score: 68/100 — Needs Attention** (was 71, −3 pts over 30 days)\n\nFour dimensions: **ETL Hygiene (55, 🔴 critical)** · ML/AI Governance (62) · Ownership & Access (71) · Data Quality (78)\n\nTop risk: 14 bronze tables directly edited in 90 days — bypassing pipeline expectations and cascading into ~**$87K/year** in rerun costs. See dimension scores below and the ETL deep-dive on page 2."
+                "content": "## Datavail Assessment\n\n**Overall Score: 68/100 — Needs Attention** (was 71, −3 pts over 30 days)\n\nFour dimensions: **ETL Hygiene (55, 🔴 critical)** · ML/AI Governance (62) · Ownership & Access (71) · Data Quality (78)\n\nTop risk: 14 bronze tables directly edited in 90 days — bypassing pipeline expectations and cascading into ~**$87K/year** in rerun costs. See dimension scores below and the ETL deep-dive on page 2."
             }
         }),
         widget("kpi_overall_score", layout(0,3,3,4), {

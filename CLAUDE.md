@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A single Databricks Asset Bundle (DAB) that builds one demo: **"Workspace Health Assessment"** — an internal AI/BI Dashboard + Genie space that scores a (simulated) Databricks workspace's ETL hygiene, ML/AI governance, ownership, and data quality. There is no application code to build/lint/test in the traditional sense; the deliverable is Databricks-hosted resources (a dashboard, a Genie space, and UC tables) provisioned by `databricks bundle` commands.
+A single Databricks Asset Bundle (DAB) that builds one demo: **"Datavail Assessment"** — an internal AI/BI Dashboard + Genie space that scores a (simulated) Databricks workspace's ETL hygiene, ML/AI governance, ownership, and data quality. There is no application code to build/lint/test in the traditional sense; the deliverable is Databricks-hosted resources (a dashboard, a Genie space, and UC tables) provisioned by `databricks bundle` commands.
 
 `context/source-brief.md` holds the original user brief (source of truth for intent). `specifications/01-lakeflow.md` (data layer) and `specifications/04-ai-bi.md` (dashboard + Genie) are the detailed specs everything else was implemented from — consult these before changing table schemas, scores, or widget layouts, since they define what's "correct."
 
@@ -21,7 +21,7 @@ databricks bundle deploy \
   --var warehouse_id=<your-warehouse-id>
 
 # Run the setup job: generates all 12 UC tables, then deploys/updates the Genie space
-databricks bundle run workspace_health_setup \
+databricks bundle run datavail_assessment_setup \
   --var catalog=<your-catalog> \
   --var schema=<your-schema> \
   --var warehouse_id=<your-warehouse-id>
@@ -44,7 +44,7 @@ src/deploy/deploy_genie.py        →  reads src/genie/genie_space.json, substit
 src/dashboard/dashboard.json      →  deployed directly as a bundle resource (databricks.yml → resources.dashboards)
 ```
 
-`databricks.yml` wires this together: it declares the `dashboards.workspace_health_dashboard` resource (from the committed `src/dashboard/dashboard.json`) and the `jobs.workspace_health_setup` job, whose two tasks run `data_generation/generate_data.py` then `src/deploy/deploy_genie.py` in sequence. `sync.exclude` deliberately keeps `app/**` out of what gets synced to the workspace.
+`databricks.yml` wires this together: it declares the `dashboards.datavail_assessment_dashboard` resource (from the committed `src/dashboard/dashboard.json`) and the `jobs.datavail_assessment_setup` job, whose two tasks run `data_generation/generate_data.py` then `src/deploy/deploy_genie.py` in sequence. `sync.exclude` deliberately keeps `app/**` out of what gets synced to the workspace.
 
 **`app/` is a separate, non-deployed implementation** — an earlier/alternate build using the SQL Statements API (`app/datagen.py`, different sample data than `data_generation/generate_data.py`) and raw M2M REST calls to build the dashboard/Genie space in Python (`app/build_resources.py`, builds dashboard JSON programmatically rather than from the committed `dashboard.json`). `app/start.sh` serves a static status page for a Databricks App. Because `sync.exclude` drops `app/**`, none of this runs as part of `databricks bundle deploy/run` — treat it as reference/scratch, not the source of truth. **When asked to change data generation, dashboard widgets, or Genie config, edit the bundle-deployed files (`data_generation/generate_data.py`, `src/dashboard/dashboard.json`, `src/genie/genie_space.json`), not the `app/` equivalents**, unless the user is specifically working on the `app/` preview path.
 

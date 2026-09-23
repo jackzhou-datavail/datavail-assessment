@@ -1,6 +1,6 @@
 # Databricks notebook source
 """
-Deploy the Workspace Health Analytics Genie Space.
+Deploy the Datavail Assessment Analytics Genie Space.
 
 Idempotent: searches by title, updates if present, creates if not.
 Loads the committed genie_space.json, substitutes catalog.schema at deploy time.
@@ -18,9 +18,9 @@ Outputs (via dbutils.jobs.taskValues.set):
 
 # COMMAND ----------
 
-SPACE_TITLE = "Workspace Health Analytics"
+SPACE_TITLE = "Datavail Assessment Analytics"
 SPACE_DESCRIPTION = (
-    "Workspace health analytics for the engineering team. Overall score: 68/100. "
+    "Datavail assessment analytics for the engineering team. Overall score: 68/100. "
     "Top risk: 14 bronze tables have been directly edited in the past 90 days — "
     "bypassing pipeline expectations and causing cascading failures worth ~$87K/year. "
     "Ask about bronze table violations, pipeline ownership gaps, ML model risks, "

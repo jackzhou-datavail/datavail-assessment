@@ -1,9 +1,9 @@
 # Databricks notebook source
 """
-Workspace Health Assessment — Synthetic Data Generator
+Datavail Assessment — Synthetic Data Generator
 
 Simulates Unity Catalog workspace metadata (tables, pipelines, jobs, audit events,
-ML assets) to power the Workspace Health Assessment dashboard and Genie space.
+ML assets) to power the Datavail Assessment dashboard and Genie space.
 
 Story signals that must hold:
   - raw_transactions (bronze) has 47 direct DML writes → tallest bar in ETL chart
@@ -48,7 +48,7 @@ if IN_NOTEBOOK:
     SCHEMA = dbutils.widgets.get("schema")
 else:
     CATALOG = os.environ.get("DEMO_CATALOG", "main")
-    SCHEMA = os.environ.get("DEMO_SCHEMA", "workspace_health_assessment")
+    SCHEMA = os.environ.get("DEMO_SCHEMA", "assessment_data")
 
 assert CATALOG and SCHEMA, "DEMO_CATALOG and DEMO_SCHEMA must be set"
 
