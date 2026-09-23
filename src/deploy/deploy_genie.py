@@ -20,11 +20,10 @@ Outputs (via dbutils.jobs.taskValues.set):
 
 SPACE_TITLE = "Datavail Assessment Analytics"
 SPACE_DESCRIPTION = (
-    "Datavail assessment analytics for the engineering team. Overall score: 68/100. "
-    "Top risk: 14 bronze tables have been directly edited in the past 90 days — "
-    "bypassing pipeline expectations and causing cascading failures worth ~$87K/year. "
-    "Ask about bronze table violations, pipeline ownership gaps, ML model risks, "
-    "or the full remediation backlog."
+    "Datavail assessment analytics for the engineering team, computed live from this "
+    "workspace's real Unity Catalog system tables — no fixed or synthetic numbers. "
+    "Ask about direct/ad-hoc writes bypassing governed pipelines, pipeline and job "
+    "ownership gaps, stale ML experiments, or the full remediation backlog."
 )
 
 # The catalog.schema placeholder baked into the committed genie_space.json.

@@ -5,37 +5,37 @@
       {
         "id": "10000000000000000000000000000001",
         "question": [
-          "What is the current Datavail Assessment score and which dimension is worst?"
+          "What is the current Datavail Assessment score and which dimension needs the most attention?"
         ]
       },
       {
         "id": "10000000000000000000000000000002",
         "question": [
-          "Which bronze tables have been directly modified, and what is the estimated annual cost of cascading failures?"
+          "Which tables have direct or ad-hoc writes bypassing governed jobs or pipelines, and how many downstream tables depend on them?"
         ]
       },
       {
         "id": "10000000000000000000000000000003",
         "question": [
-          "Which ML models are serving features from tables that had direct writes in the last 30 days?"
+          "Which MLflow experiments are stale, with no runs in the last 30+ days?"
         ]
       },
       {
         "id": "10000000000000000000000000000004",
         "question": [
-          "Which production pipelines have no owner tag?"
+          "Which pipelines and jobs have no identifiable owner?"
         ]
       },
       {
         "id": "10000000000000000000000000000005",
         "question": [
-          "How has ownership coverage improved over the past 30 days?"
+          "What is the current ownership coverage for production pipelines?"
         ]
       },
       {
         "id": "10000000000000000000000000000006",
         "question": [
-          "Show me the top 10 critical and high findings ranked by business impact."
+          "Show me the top critical and high findings in the remediation backlog."
         ]
       }
     ]
@@ -48,7 +48,7 @@
           {
             "column_name": "downstream_gold_tables",
             "description": [
-              "Comma-separated list of gold tables that depend on this bronze table via lineage."
+              "Comma-separated list of tables that read from this table via real Unity Catalog lineage in the past 90 days."
             ],
             "synonyms": [
               "downstream tables",
@@ -58,24 +58,17 @@
           {
             "column_name": "edit_count_90d",
             "description": [
-              "Number of direct DML events (INSERT/UPDATE/DELETE/MERGE/TRUNCATE) in the past 90 days."
+              "Number of real writes in the past 90 days that did NOT go through a governed job or pipeline (ad-hoc notebook, SQL query, or unattributed write), from system.access.table_lineage."
             ],
             "synonyms": [
               "edits",
               "direct writes",
-              "DML events"
+              "ad-hoc writes"
             ]
           },
           {
             "column_name": "estimated_rerun_cost_usd",
-            "description": [
-              "Annual estimated cost in USD from pipeline reruns caused by direct DML writes on this bronze table."
-            ],
-            "synonyms": [
-              "rerun cost",
-              "annual cost",
-              "cascading failure cost"
-            ]
+            "exclude": true
           },
           {
             "column_name": "severity",
@@ -97,23 +90,23 @@
             "enable_entity_matching": true,
             "enable_format_assistance": true,
             "description": [
-              "Health dimension: overall, etl_hygiene, ml_ai_governance, ownership_access, data_quality."
+              "Assessment dimension: overall, etl_hygiene, ml_ai_governance, ownership_access, data_quality."
             ]
           },
           {
             "column_name": "score",
             "description": [
-              "Health score 0-100. Below 60 = critical, 60-74 = needs attention, 75+ = healthy."
+              "Real computed score 0-100. Below 60 = critical, 60-74 = needs attention, 75+ = healthy."
             ],
             "synonyms": [
-              "health score",
+              "assessment score",
               "workspace score"
             ]
           },
           {
             "column_name": "score_delta_30d",
             "description": [
-              "Change in score vs 30 days ago. Negative means the dimension is deteriorating."
+              "Change in score vs 30 days ago. Only populated for dimension = 'etl_hygiene' (a genuine rolling 30-day computation from timestamped events). NULL for the other three dimensions and for 'overall' — Unity Catalog only exposes current state for those, not history. Never invent a value when this is NULL."
             ],
             "synonyms": [
               "score change",
@@ -129,7 +122,7 @@
           {
             "column_name": "ownership_coverage_pct",
             "description": [
-              "Percentage of production pipelines with owner tags. Trend goes from 58% (30 days ago) to 69% (today). Goal is 95%."
+              "Current percentage of production pipelines with a real identifiable owner (run_as is a real user email). This table has exactly ONE row (today) — it is a point-in-time reading, not a historical trend, because Unity Catalog does not expose daily ownership snapshots."
             ],
             "synonyms": [
               "ownership",
@@ -145,7 +138,7 @@
           {
             "column_name": "failure_rate_30d",
             "description": [
-              "Fraction of runs that failed in the last 30 days (0.0 to 1.0). customer_churn_etl, revenue_pipeline_v1, and ml_feature_refresh all exceed 0.40."
+              "Fraction of real pipeline update runs (system.lakeflow.pipeline_update_timeline) that failed or were canceled in the last 30 days (0.0 to 1.0)."
             ],
             "synonyms": [
               "failure rate",
@@ -155,7 +148,7 @@
           {
             "column_name": "has_owner_tag",
             "description": [
-              "True if the pipeline has an owner tag assigned. 31 pipelines have has_owner_tag = FALSE \u2014 these are the orphaned pipelines."
+              "True if the pipeline's run_as identity is a real user email. FALSE means no identifiable owner could be determined from Unity Catalog metadata."
             ],
             "synonyms": [
               "has owner",
@@ -185,14 +178,7 @@
           },
           {
             "column_name": "business_impact_usd",
-            "description": [
-              "Annual business impact in USD if this finding is not remediated."
-            ],
-            "synonyms": [
-              "impact",
-              "cost",
-              "risk"
-            ]
+            "exclude": true
           },
           {
             "column_name": "category",
@@ -206,13 +192,7 @@
           },
           {
             "column_name": "sprint_estimate_days",
-            "description": [
-              "Engineering effort estimate in days to resolve this finding."
-            ],
-            "synonyms": [
-              "effort",
-              "fix time"
-            ]
+            "exclude": true
           }
         ]
       },
@@ -224,7 +204,7 @@
             "enable_entity_matching": true,
             "enable_format_assistance": true,
             "description": [
-              "DML operation type: INSERT, UPDATE, DELETE, MERGE, TRUNCATE."
+              "Always DIRECT_WRITE. This table only contains writes NOT triggered by a governed job or pipeline (real lineage entity_type is NULL, NOTEBOOK, or DBSQL_QUERY) — Unity Catalog lineage does not expose INSERT/UPDATE/DELETE granularity."
             ]
           },
           {
@@ -239,7 +219,7 @@
           {
             "column_name": "user_email",
             "description": [
-              "Engineer who ran the DML query directly on the bronze table."
+              "User or service principal identity attributed to this direct/ad-hoc write (from real lineage created_by)."
             ],
             "synonyms": [
               "user",
@@ -254,35 +234,23 @@
         "column_configs": [
           {
             "column_name": "is_serving_stale_features",
-            "description": [
-              "TRUE if the model's serving endpoint is reading from a bronze table that received direct DML writes in the last 30 days. Exactly 2 models have this flag set."
-            ],
-            "synonyms": [
-              "stale features",
-              "stale model",
-              "data staleness"
-            ]
+            "exclude": true
           },
           {
             "column_name": "model_name",
             "enable_entity_matching": true,
-            "enable_format_assistance": true
+            "enable_format_assistance": true,
+            "description": [
+              "Real custom-model serving endpoint (system.serving.served_entities, entity_type = CUSTOM_MODEL). Excludes Databricks' built-in foundation models. This table may legitimately be empty if the workspace has no custom models in production."
+            ]
           },
           {
             "column_name": "registered_in_uc",
-            "description": [
-              "True if model is registered in Unity Catalog model registry. FALSE means lineage is broken."
-            ]
+            "exclude": true
           },
           {
             "column_name": "upstream_features_table",
-            "description": [
-              "The table the model's training pipeline reads from for feature data."
-            ],
-            "synonyms": [
-              "feature table",
-              "input table"
-            ]
+            "exclude": true
           }
         ]
       }
@@ -294,22 +262,22 @@
         "id": "30000000000000000000000000000001",
         "content": [
           "## PURPOSE",
-          "- Answer Datavail Assessment questions for Alex Chen (Head of Data Engineering) and their engineering team.",
-          "- This workspace has a 68/100 assessment score (was 71 thirty days ago). ETL Hygiene (55) is the worst dimension.",
+          "- Answer Datavail Assessment questions using REAL Unity Catalog system-table data for this workspace's own pipelines, jobs, tables, and ML assets.",
+          "- Every number is computed live from system.access.*, system.lakeflow.*, system.mlflow.*, and system.information_schema.* — there is no fixed 'target' score or count to recite from memory. Always query for the current value.",
           "## DISAMBIGUATION",
           "- 'Assessment score' means the score column in gold_health_scores WHERE report_date = CURRENT_DATE.",
-          "- 'Bronze table edits' refers to gold_bronze_table_edits \u2014 use edit_count_90d for frequency and estimated_rerun_cost_usd for cost.",
-          "- 'Stale features' means raw_ws_ml_models WHERE is_serving_stale_features = TRUE (exactly 2 models).",
-          "- 'Unowned pipelines' means gold_pipeline_health WHERE has_owner_tag = FALSE (31 total, 9 production).",
-          "- When the user asks about 'the worst table' or 'most edited table', that is raw_transactions with 47 edits.",
-          "## DATA QUALITY NOTES",
-          "- gold_health_scores has one row per (report_date, dimension). Use WHERE report_date = CURRENT_DATE for today's score.",
-          "- gold_bronze_table_edits has exactly 14 rows \u2014 one per bronze table with direct DML in 90 days.",
-          "- SUM(estimated_rerun_cost_usd) in gold_bronze_table_edits equals exactly $87,000.",
-          "- gold_ownership_trend covers 30 days; ownership_coverage_pct goes from ~58% to ~69%.",
+          "- 'Direct' or 'ad-hoc' writes means raw_ws_audit_events / gold_bronze_table_edits — a write that did NOT come from a governed job or pipeline run.",
+          "- 'Unowned' pipelines/jobs means has_owner_tag = FALSE in gold_pipeline_health / raw_ws_jobs — no real user email could be attributed as owner.",
+          "- 'Stale' ML experiments means raw_ws_ml_experiments WHERE is_stale = TRUE — no run in the last 30+ days.",
+          "## DATA LIMITATIONS — IMPORTANT, DO NOT WORK AROUND THESE",
+          "- estimated_rerun_cost_usd and business_impact_usd are always NULL. There is no real dollar-cost signal available. Never state or estimate a specific dollar figure for these — if asked, say cost impact is not measured.",
+          "- sprint_estimate_days is always NULL. Effort sizing is a human judgment call this pipeline does not make.",
+          "- gold_ownership_trend has exactly ONE row (today). There is no historical ownership trend — do not describe or extrapolate one.",
+          "- score_delta_30d is only populated for dimension = 'etl_hygiene' (a genuine rolling 30-day computation). It is NULL for the other three dimensions and for 'overall' — never invent a delta when it is NULL.",
+          "- raw_ws_ml_models only contains real custom-model serving endpoints and may be empty — an empty result means no custom models are in production, which is itself a valid answer, not an error.",
           "## Instructions you must follow when providing summaries",
-          "- Always state the total at-risk amount ($250K/year) when summarizing the Datavail Assessment.",
-          "- When quoting bronze table edit costs, confirm the total is $87K/year.",
+          "- Never state a dollar amount for cost or business impact.",
+          "- When asked for 'the worst table' or 'the worst pipeline', compute it live by ordering on the relevant metric — do not assume a fixed answer.",
           "- Round percentages to one decimal place."
         ]
       }
@@ -318,37 +286,37 @@
       {
         "id": "20000000000000000000000000000001",
         "question": [
-          "Which bronze tables have the most direct edits and what is the total rerun cost?"
+          "Which tables have the most direct/ad-hoc writes bypassing governed pipelines, and how many downstream tables depend on them?"
         ],
         "sql": [
-          "SELECT gold_bronze_table_edits.table_name, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.severity, gold_bronze_table_edits.downstream_gold_tables, gold_bronze_table_edits.estimated_rerun_cost_usd FROM `__CATALOG__.__SCHEMA__`.`gold_bronze_table_edits` ORDER BY gold_bronze_table_edits.edit_count_90d DESC"
+          "SELECT gold_bronze_table_edits.table_name, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.severity, gold_bronze_table_edits.downstream_gold_tables FROM `__CATALOG__.__SCHEMA__`.`gold_bronze_table_edits` ORDER BY gold_bronze_table_edits.edit_count_90d DESC"
         ],
         "usage_guidance": [
-          "Use this for the primary bronze-edit cost analysis. The SUM of estimated_rerun_cost_usd = $87K/year."
+          "Primary direct-write analysis. There is no cost column — estimated_rerun_cost_usd is not measured and always NULL."
         ]
       },
       {
         "id": "20000000000000000000000000000002",
         "question": [
-          "Which ML models are serving stale features and which bronze table caused the staleness?"
+          "Which MLflow experiments are stale and who owns them?"
         ],
         "sql": [
-          "WITH stale_models AS (SELECT raw_ws_ml_models.model_name, raw_ws_ml_models.serving_endpoint_name, raw_ws_ml_models.upstream_features_table, raw_ws_ml_models.features_last_modified_date FROM `__CATALOG__.__SCHEMA__`.`raw_ws_ml_models` WHERE raw_ws_ml_models.is_serving_stale_features = TRUE) SELECT stale_models.model_name, stale_models.serving_endpoint_name, stale_models.upstream_features_table, stale_models.features_last_modified_date, gold_bronze_table_edits.edit_count_90d, gold_bronze_table_edits.estimated_rerun_cost_usd FROM stale_models LEFT JOIN `__CATALOG__.__SCHEMA__`.`gold_bronze_table_edits` ON stale_models.upstream_features_table = gold_bronze_table_edits.table_name"
+          "SELECT raw_ws_ml_experiments.experiment_name, raw_ws_ml_experiments.owner_email, raw_ws_ml_experiments.last_run_date FROM `__CATALOG__.__SCHEMA__`.`raw_ws_ml_experiments` WHERE raw_ws_ml_experiments.is_stale = TRUE ORDER BY raw_ws_ml_experiments.last_run_date"
         ],
         "usage_guidance": [
-          "Cross-table join: connects ML model staleness to the bronze table edits that caused it. Returns exactly 2 models."
+          "Real experiment staleness from system.mlflow. A small or empty result is a real, not synthetic, outcome — do not pad it."
         ]
       },
       {
         "id": "20000000000000000000000000000003",
         "question": [
-          "Show the full remediation backlog ranked by severity and business impact"
+          "Show the full remediation backlog ranked by severity"
         ],
         "sql": [
-          "SELECT gold_remediation_backlog.finding_id, gold_remediation_backlog.severity, gold_remediation_backlog.category, gold_remediation_backlog.asset_type, gold_remediation_backlog.asset_name, gold_remediation_backlog.owner_email, gold_remediation_backlog.description, gold_remediation_backlog.business_impact_usd, gold_remediation_backlog.recommended_action, gold_remediation_backlog.sprint_estimate_days FROM `__CATALOG__.__SCHEMA__`.`gold_remediation_backlog` ORDER BY CASE gold_remediation_backlog.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, gold_remediation_backlog.business_impact_usd DESC"
+          "SELECT gold_remediation_backlog.finding_id, gold_remediation_backlog.severity, gold_remediation_backlog.category, gold_remediation_backlog.asset_type, gold_remediation_backlog.asset_name, gold_remediation_backlog.owner_email, gold_remediation_backlog.description, gold_remediation_backlog.recommended_action, gold_remediation_backlog.detected_at FROM `__CATALOG__.__SCHEMA__`.`gold_remediation_backlog` ORDER BY CASE gold_remediation_backlog.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, gold_remediation_backlog.category, gold_remediation_backlog.asset_name"
         ],
         "usage_guidance": [
-          "Sprint-planning backlog. 6 critical, 11 high, 23 medium findings. Total impact ~$250K/year."
+          "Sprint-planning backlog. No business_impact_usd or sprint_estimate_days column — neither is measurable from system tables; a human must size these before sprint planning."
         ]
       }
     ]

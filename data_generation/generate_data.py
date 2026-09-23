@@ -1,43 +1,53 @@
 # Databricks notebook source
 """
-Datavail Assessment — Synthetic Data Generator
+Datavail Assessment — REAL Data Extractor (real_data branch)
 
-Simulates Unity Catalog workspace metadata (tables, pipelines, jobs, audit events,
-ML assets) to power the Datavail Assessment dashboard and Genie space.
+Unlike the synthetic generator on master, this script computes every raw_ws_*
+and gold_* table from this workspace's actual Unity Catalog system tables
+(system.access.*, system.lakeflow.*, system.mlflow.*, system.serving.*,
+system.information_schema.*). Nothing here is fabricated: a metric is either
+a real measurement or it is left NULL.
 
-Story signals that must hold:
-  - raw_transactions (bronze) has 47 direct DML writes → tallest bar in ETL chart
-  - 14 total bronze tables have direct edits
-  - 31 pipelines without owner tag (9 in production)
-  - Overall health score: 68/100  ETL Hygiene: 55  ML/AI: 62  Ownership: 71  DQ: 78
-  - 2 ML models serving stale features from ml_features_bronze
-  - $87K/year estimated rerun cost from the 3 critical bronze table violations
-  - Ownership coverage trend: 58% → 69% over 30 days
+What is genuinely measurable in this workspace and used below:
+  - Direct/ad-hoc table writes that bypass a governed job or pipeline
+    (system.access.table_lineage, entity_type NULL/NOTEBOOK/DBSQL_QUERY)
+  - Real pipeline/job ownership (created_by / run_as) and failure rates
+    (system.lakeflow.pipelines/jobs + *_run_timeline, *_update_timeline)
+  - Real table comment coverage and naming hygiene
+    (system.information_schema.tables)
+  - Real MLflow experiment staleness (system.mlflow.experiments_latest/runs_latest)
+  - Real custom-model serving endpoints (system.serving.served_entities,
+    filtered to CUSTOM_MODEL — this workspace only serves Databricks'
+    built-in foundation models, so this is expected to be empty)
 
-Tables created
-  Raw (workspace metadata simulation):
-    raw_ws_tables, raw_ws_pipelines, raw_ws_jobs, raw_ws_job_runs,
-    raw_ws_audit_events, raw_ws_ml_experiments, raw_ws_ml_models
+What is NOT measurable here and is intentionally left NULL / dropped rather
+than invented (per explicit decision, not an oversight):
+  - Dollar cost of any finding (estimated_rerun_cost_usd, business_impact_usd)
+  - DLT data-quality expectations / hardcoded-path usage (not exposed by
+    system tables without parsing pipeline source, so has_dq_expectations
+    and uses_hardcoded_paths are NULL and never drive a finding)
+  - Sprint sizing (sprint_estimate_days) — effort estimation is a human
+    judgment call, not something this pipeline can measure
+  - A 30-day history for ownership coverage — Unity Catalog only exposes
+    current state, not daily snapshots, so gold_ownership_trend has exactly
+    one row (today) instead of a fabricated line. ETL Hygiene is the one
+    dimension with a genuine 30-day trend, because system.access.table_lineage
+    and system.lakeflow.pipeline_update_timeline carry real historical
+    timestamps we can roll a window over.
 
-  Gold (dashboard + Genie reads):
-    gold_health_scores, gold_bronze_table_edits, gold_pipeline_health,
-    gold_ownership_trend, gold_remediation_backlog
+Tables created (same shape as the synthetic generator, so the dashboard and
+Genie space work unchanged):
+  Raw:  raw_ws_tables, raw_ws_pipelines, raw_ws_jobs, raw_ws_job_runs,
+        raw_ws_audit_events, raw_ws_ml_experiments, raw_ws_ml_models
+  Gold: gold_bronze_table_edits, gold_pipeline_health, gold_ownership_trend,
+        gold_remediation_backlog, gold_health_scores
 """
 
 from __future__ import annotations
 
-import decimal
 import os
-import random
-from datetime import datetime, timedelta
 
 from databricks.connect import DatabricksSession
-from pyspark.sql import DataFrame
-from pyspark.sql import functions as F
-from pyspark.sql.types import (
-    BooleanType, DateType, DecimalType, IntegerType, LongType,
-    StringType, StructField, StructType, TimestampType,
-)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 IN_NOTEBOOK = "dbutils" in dir()
@@ -62,906 +72,573 @@ except NameError:
         .getOrCreate()
     )
 
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
+FQ = f"`{CATALOG}`.`{SCHEMA}`"
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{CATALOG}`.`{SCHEMA}`")
 
-NOW = datetime.now()
-NOW_STR = NOW.strftime("%Y-%m-%d")
-REPORT_DATE = NOW.strftime("%Y-%m-%d")
-BASELINE_DATE = (NOW - timedelta(days=30)).strftime("%Y-%m-%d")
-
-random.seed(42)
-
-DML_TYPES = ["INSERT", "UPDATE", "DELETE", "MERGE", "TRUNCATE"]
-DML_WEIGHTS = [0.45, 0.25, 0.10, 0.15, 0.05]
-
-
-def _save(df: DataFrame, table: str) -> None:
-    fqn = f"{CATALOG}.{SCHEMA}.{table}"
-    df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(fqn)
-    cnt = spark.table(fqn).count()
-    print(f"  ✓ {table:40s}  rows={cnt:>6,}")
-
-
-def _ts(days_back: int, jitter_hours: int = 0) -> str:
-    """Timestamp string NOW - days_back ± jitter."""
-    base = NOW - timedelta(days=days_back)
-    if jitter_hours:
-        base += timedelta(hours=random.randint(-jitter_hours, jitter_hours))
-    return base.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _date(days_back: int) -> str:
-    return (NOW - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
-
-# ── Raw table definitions ─────────────────────────────────────────────────────
-# These are the 14 bronze tables with direct DML edits (the anti-pattern)
-BRONZE_EDITED = [
-    # (table_name, edit_count, downstream_gold_count, downstream_gold_list, rerun_cost_usd, is_critical)
-    ("raw_transactions",       47, 3, "gold_revenue_summary,gold_daily_metrics,gold_exec_kpis",        34000.00, True),
-    ("ml_features_bronze",     12, 2, "gold_churn_predictions,gold_model_inputs",                      18000.00, True),
-    ("customer_events_bronze",  9, 2, "gold_customer_360,gold_segment_rollup",                         14000.00, True),
-    ("order_items_bronze",      6, 1, "gold_product_performance",                                       5000.00, False),
-    ("payment_events_bronze",   5, 1, "gold_payment_summary",                                           4500.00, False),
-    ("inventory_bronze",        4, 0, "",                                                                3800.00, False),
-    ("clickstream_raw",         4, 1, "gold_funnel_analysis",                                           3200.00, False),
-    ("sensor_readings_raw",     3, 0, "",                                                                2500.00, False),
-    ("erp_staging_bronze",      3, 1, "gold_erp_reconciliation",                                        2200.00, False),
-    ("support_tickets_raw",     2, 0, "",                                                                1800.00, False),
-    ("ad_spend_bronze",         2, 0, "",                                                                1500.00, False),
-    ("fulfillment_events_raw",  2, 1, "gold_fulfillment_sla",                                           1200.00, False),
-    ("user_sessions_bronze",    2, 0, "",                                                                1000.00, False),
-    ("pricing_overrides_raw",   1, 1, "gold_pricing_analysis",                                          1000.00, False),
+# ── Exclusions ───────────────────────────────────────────────────────────────
+# Never assess the tables/jobs *this project itself* creates — that would be
+# circular. Add the current write target plus every schema this project has
+# ever written to across earlier iterations.
+PROJECT_SCOPES = [
+    (CATALOG, SCHEMA),
+    ("jz_test", "assessment_data"),
+    ("jz_test", "assessment_data_real"),
+    ("jz_test", "workspace_health_assessment"),
+    ("jz_test", "demo_workspace_health_assessment_report"),
+    ("solution_builder", "demo_workspace_health_assessment_report"),
 ]
+EXCLUDE_CATALOGS_SQL = "('system','samples')"
 
-BRONZE_CLEAN = [
-    "raw_leads", "raw_accounts", "raw_contacts", "raw_opportunities",
-    "raw_campaigns", "raw_emails", "raw_surveys", "raw_nps_scores",
-    "raw_product_catalog", "raw_geography", "raw_employee_data", "raw_vendors",
-    "raw_contracts", "raw_sla_definitions", "raw_alert_configs", "raw_feature_flags",
-    "raw_cost_centers", "raw_budget_allocations", "raw_regulatory_filings",
-    "raw_audit_templates", "raw_taxonomy", "raw_org_hierarchy", "raw_calendar_dim",
-    "raw_currency_rates", "raw_channel_definitions", "raw_kpi_definitions",
-]  # 26 clean bronze tables → total bronze = 14 + 26 = 40
 
-SILVER_TABLES = [
-    "silver_customers", "silver_orders", "silver_transactions", "silver_events",
-    "silver_ml_features", "silver_churn_signals", "silver_product_perf",
-    "silver_marketing_touches", "silver_support_cases", "silver_fulfillment",
-    "silver_inventory_pos", "silver_pricing", "silver_channel_perf",
-    "silver_campaign_metrics", "silver_user_activity", "silver_sales_pipeline",
-    "silver_revenue_accrual", "silver_cost_allocation", "silver_vendor_spend",
-    "silver_employee_metrics", "silver_nps_enriched", "silver_ad_attribution",
-    "silver_erp_normalized", "silver_payment_enriched", "silver_segment_features",
-    "silver_funnel_events", "silver_session_enriched", "silver_feature_store",
-    "silver_model_features_v2", "silver_label_data",
-    "silver_geo_enriched", "silver_time_series_agg", "silver_cohort_data",
-    "silver_retention_signals", "silver_ltv_features", "silver_risk_scores",
-    "silver_compliance_flags", "silver_data_quality_metrics", "silver_lineage_meta",
-    "silver_pipeline_telemetry", "silver_job_metrics", "silver_cost_forecast",
-    "silver_capacity_plan", "silver_incident_log", "silver_change_log",
-    "silver_access_summary", "silver_schema_history", "silver_table_stats",
-    "silver_query_patterns", "silver_usage_metrics", "silver_cluster_utilization",
-    "silver_serverless_usage", "silver_warehouse_perf", "silver_photon_gains",
-    "silver_storage_delta", "silver_compute_costs", "silver_team_productivity",
-    "silver_sprint_metrics", "silver_pr_analytics", "silver_test_coverage",
-    "silver_deploy_freq", "silver_lead_time", "silver_mttr", "silver_change_fail_rate",
-    "silver_sla_compliance", "silver_error_rates", "silver_latency_p99",
-    "silver_throughput", "silver_capacity_forecast", "silver_budget_vs_actual",
-    "silver_forecast_accuracy", "silver_anomaly_scores", "silver_root_cause_flags",
-    "silver_remediation_log", "silver_health_benchmark", "silver_peer_comparison",
-    "silver_maturity_scores", "silver_improvement_velocity", "silver_kpi_tracker",
-    "silver_action_items",
-]  # 80 silver tables
-
-GOLD_TABLES = [
-    "gold_revenue_summary", "gold_daily_metrics", "gold_exec_kpis",
-    "gold_churn_predictions", "gold_model_inputs", "gold_customer_360",
-    "gold_segment_rollup", "gold_product_performance", "gold_payment_summary",
-    "gold_funnel_analysis", "gold_erp_reconciliation", "gold_fulfillment_sla",
-    "gold_pricing_analysis", "gold_marketing_roi", "gold_campaign_perf",
-    "gold_sales_forecast", "gold_ltv_predictions", "gold_cohort_retention",
-    "gold_risk_dashboard", "gold_compliance_summary", "gold_data_quality_kpis",
-    "gold_platform_health", "gold_cost_efficiency", "gold_team_velocity",
-    "gold_workspace_utilization", "gold_sla_adherence", "gold_anomaly_report",
-    "gold_incident_summary", "gold_capacity_forecast", "gold_budget_actuals",
-    "gold_strategic_kpis", "gold_exec_dashboard", "gold_investor_metrics",
-    "gold_ops_runbook", "gold_alert_summary", "gold_escalation_tracker",
-    "gold_remediation_status", "gold_maturity_index", "gold_benchmark_scores",
-    "gold_quarterly_review",
-    "gold_health_scores", "gold_bronze_table_edits", "gold_pipeline_health",
-    "gold_ownership_trend", "gold_remediation_backlog",  # our health assessment tables
-    "gold_churn_v2", "gold_revenue_forecast_v3", "gold_segment_v4",
-    "gold_ltv_v2", "gold_attribution_v2", "gold_funnel_v2", "gold_cohort_v2",
-    "gold_ml_perf_v2", "gold_feature_importance", "gold_shap_analysis",
-    "gold_model_drift_scores", "gold_data_drift_metrics", "gold_bias_report",
-    "gold_fairness_metrics", "gold_explainability_report", "gold_audit_trail",
-    "gold_gdpr_compliance", "gold_ccpa_compliance", "gold_sox_controls",
-    "gold_iso_evidence", "gold_vendor_risk", "gold_third_party_access",
-    "gold_data_catalog_completeness", "gold_lineage_coverage", "gold_ownership_map",
-    "gold_access_patterns", "gold_query_efficiency", "gold_compute_allocation",
-    "gold_storage_tiering", "gold_cold_data_candidates", "gold_schema_evolution",
-    "gold_breaking_changes", "gold_consumer_impact",
-]  # 80 gold tables
-
-ENGINEERS = [
-    "alice.chen@company.com", "bob.kumar@company.com", "carlos.santos@company.com",
-    "diana.patel@company.com", "erik.johansson@company.com", "fatima.ali@company.com",
-    "grace.liu@company.com", "henry.brown@company.com", "irene.garcia@company.com",
-    "james.wilson@company.com", "kate.murphy@company.com", "liam.zhang@company.com",
-    "maya.rodriguez@company.com", "noah.kim@company.com", "olivia.taylor@company.com",
-]
-
-PIPELINE_NAMES = [
-    "customer_churn_etl", "revenue_pipeline_v1", "ml_feature_refresh",
-    "order_processing_daily", "inventory_sync_hourly", "customer_360_builder",
-    "marketing_attribution_etl", "payment_reconciliation", "fraud_detection_pipeline",
-    "sales_forecast_job", "support_ticket_enrichment", "ad_spend_ingestion",
-    "erp_sync_nightly", "clickstream_processor", "session_aggregator",
-    "campaign_performance_etl", "product_catalog_sync", "fulfillment_tracker",
-    "nps_score_processor", "risk_scoring_pipeline", "compliance_audit_etl",
-    "data_quality_monitor", "schema_drift_detector", "lineage_crawler",
-    "usage_analytics_daily", "cost_allocation_etl", "capacity_planner",
-    "sla_monitor_pipeline", "alert_aggregator", "incident_processor",
-    "kpi_calculator_v2", "feature_store_updater", "label_generator",
-    "model_retraining_trigger", "prediction_scorer_batch", "anomaly_detector",
-    "root_cause_analyzer", "remediation_tracker", "health_score_calculator",
-    "peer_benchmark_sync",
-]
-
-# ── 1. raw_ws_tables ─────────────────────────────────────────────────────────
-print("Generating raw_ws_tables …")
-
-edited_bronze_names = {r[0] for r in BRONZE_EDITED}
-all_bronze_names = [r[0] for r in BRONZE_EDITED] + BRONZE_CLEAN  # 14 + 26 = 40
-
-tables_rows = []
-catalogs = ["main"] * 18 + ["analytics"] * 2
-for i, tname in enumerate(all_bronze_names):
-    cat = catalogs[i % len(catalogs)]
-    has_owner = tname not in edited_bronze_names and random.random() < 0.82
-    owner = random.choice(ENGINEERS) if has_owner else None
-    has_comment = tname not in edited_bronze_names and random.random() < 0.75
-    naming_viol = random.random() < 0.20  # 20% violation rate for bronze
-    created_back = random.randint(60, 540)
-    tables_rows.append((
-        f"TBL-{i:05d}", tname, cat, f"{cat}_bronze", "bronze",
-        owner, bool(owner), has_comment, naming_viol,
-        random.randint(5000, 5000000),
-        _ts(created_back), _ts(random.randint(1, 30)),
-    ))
-
-silver_start = len(all_bronze_names)
-for i, tname in enumerate(SILVER_TABLES):
-    j = silver_start + i
-    cat = "main" if i % 4 != 0 else "analytics"
-    has_owner = random.random() < 0.88
-    owner = random.choice(ENGINEERS) if has_owner else None
-    naming_viol = random.random() < 0.38
-    created_back = random.randint(30, 400)
-    tables_rows.append((
-        f"TBL-{j:05d}", tname, cat, f"{cat}_silver", "silver",
-        owner, bool(owner), True, naming_viol,
-        random.randint(10000, 20000000),
-        _ts(created_back), _ts(random.randint(1, 14)),
-    ))
-
-gold_start = silver_start + len(SILVER_TABLES)
-for i, tname in enumerate(GOLD_TABLES):
-    j = gold_start + i
-    cat = "main" if i % 5 != 0 else "analytics"
-    has_owner = random.random() < 0.91
-    owner = random.choice(ENGINEERS) if has_owner else None
-    naming_viol = random.random() < 0.32
-    created_back = random.randint(15, 300)
-    tables_rows.append((
-        f"TBL-{j:05d}", tname, cat, f"{cat}_gold", "gold",
-        owner, bool(owner), True, naming_viol,
-        random.randint(500, 5000000),
-        _ts(created_back), _ts(random.randint(1, 7)),
-    ))
-
-tables_schema = StructType([
-    StructField("table_id", StringType(), False),
-    StructField("table_name", StringType(), False),
-    StructField("catalog_name", StringType(), False),
-    StructField("schema_name", StringType(), False),
-    StructField("data_layer", StringType(), False),
-    StructField("owner_email", StringType(), True),
-    StructField("has_owner_tag", BooleanType(), False),
-    StructField("has_table_comment", BooleanType(), False),
-    StructField("naming_violation", BooleanType(), False),
-    StructField("row_count_approx", LongType(), False),
-    StructField("created_at", StringType(), False),
-    StructField("last_ddl_at", StringType(), False),
-])
-tables_df = spark.createDataFrame(tables_rows, tables_schema).select(
-    "table_id", "table_name", "catalog_name", "schema_name", "data_layer",
-    "owner_email", "has_owner_tag", "has_table_comment", "naming_violation",
-    "row_count_approx",
-    F.to_timestamp("created_at").alias("created_at"),
-    F.to_timestamp("last_ddl_at").alias("last_ddl_at"),
-)
-_save(tables_df, "raw_ws_tables")
-
-# ── 2. raw_ws_pipelines ───────────────────────────────────────────────────────
-print("Generating raw_ws_pipelines …")
-
-# Critical pipelines (40%+ failure rate, named in README)
-CRITICAL_PIPES = {
-    "customer_churn_etl": (False, True, False, True, 0.43),    # no owner, prod, hardcoded_paths, no_dq
-    "revenue_pipeline_v1": (False, True, True, False, 0.41),   # no owner, prod, hardcoded_paths
-    "ml_feature_refresh": (False, True, False, True, 0.45),    # no owner, prod, no_dq
-}
-
-pipes_rows = []
-no_owner_count = 0
-no_owner_prod_count = 0
-TOTAL_PIPES = 150
-NO_OWNER_TARGET = 31
-NO_OWNER_PROD_TARGET = 9
-
-# First add all named pipelines
-named_pipes = PIPELINE_NAMES[:40]  # use first 40 named ones
-auto_pipes = [f"pipeline_{i:04d}" for i in range(TOTAL_PIPES - len(named_pipes))]
-all_pipe_names = named_pipes + auto_pipes
-
-schedules = ["hourly", "daily", "daily", "daily", "weekly", "manual"]
-
-for i, pname in enumerate(all_pipe_names):
-    if pname in CRITICAL_PIPES:
-        no_owner, is_prod, hardcoded, no_dq, fail_rate = CRITICAL_PIPES[pname]
-        has_owner_tag = not no_owner
-        owner = None if no_owner else random.choice(ENGINEERS)
-        if no_owner:
-            no_owner_count += 1
-        if no_owner and is_prod:
-            no_owner_prod_count += 1
-    else:
-        is_prod = i < 60  # first 60 are production
-        # Distribute no-owner slots: exclude critical pipes (already counted)
-        remaining_no_owner = NO_OWNER_TARGET - no_owner_count - len(CRITICAL_PIPES)
-        remaining_slots = TOTAL_PIPES - i - len([p for p in CRITICAL_PIPES if p not in all_pipe_names[:i]])
-        need_no_owner = (remaining_no_owner > 0) and (
-            (no_owner_count < NO_OWNER_TARGET) and
-            (remaining_no_owner / max(1, remaining_slots) > random.random())
-        )
-        if need_no_owner:
-            has_owner_tag = False
-            owner = None
-            no_owner_count += 1
-            if is_prod and no_owner_prod_count < NO_OWNER_PROD_TARGET:
-                no_owner_prod_count += 1
-        else:
-            has_owner_tag = True
-            owner = random.choice(ENGINEERS)
-        hardcoded = not has_owner_tag and random.random() < 0.4
-        no_dq = not has_owner_tag and random.random() < 0.3
-        fail_rate = round(random.uniform(0.02, 0.15), 3) if has_owner_tag else round(random.uniform(0.05, 0.25), 3)
-
-    last_status = (
-        "failed" if fail_rate > 0.35 else
-        "warning" if fail_rate > 0.15 else
-        "succeeded"
+def not_project_scope(catalog_col: str, schema_col: str) -> str:
+    """SQL predicate excluding this project's own catalogs/schemas."""
+    conds = " OR ".join(
+        f"({catalog_col} = '{c}' AND {schema_col} = '{s}')" for c, s in PROJECT_SCOPES
     )
+    return f"NOT ({conds})"
 
-    pipes_rows.append((
-        f"PIPE-{i:06d}", pname, owner, has_owner_tag, is_prod,
-        random.choice(schedules), not no_dq, not hardcoded,
-        last_status, _date(random.randint(0, 7)),
-        random.randint(120, 3600),
-        _ts(random.randint(90, 540)),
-    ))
 
-pipes_schema = StructType([
-    StructField("pipeline_id", StringType(), False),
-    StructField("pipeline_name", StringType(), False),
-    StructField("owner_email", StringType(), True),
-    StructField("has_owner_tag", BooleanType(), False),
-    StructField("is_production", BooleanType(), False),
-    StructField("schedule_type", StringType(), False),
-    StructField("has_dq_expectations", BooleanType(), False),
-    StructField("has_clean_paths", BooleanType(), False),
-    StructField("last_run_status", StringType(), False),
-    StructField("last_run_date", StringType(), False),
-    StructField("avg_duration_sec", IntegerType(), False),
-    StructField("created_at", StringType(), False),
-])
-pipes_df = spark.createDataFrame(pipes_rows, pipes_schema).select(
-    "pipeline_id", "pipeline_name", "owner_email", "has_owner_tag", "is_production",
-    "schedule_type", "has_dq_expectations", "has_clean_paths", "last_run_status",
-    F.to_date("last_run_date").alias("last_run_date"),
-    "avg_duration_sec",
-    F.to_timestamp("created_at").alias("created_at"),
+# Our own setup job / dashboard's job runs shouldn't count as "the workspace's ETL".
+EXCLUDE_JOB_NAME_SQL = "name NOT RLIKE '(?i)(datavail assessment setup|workspace health setup)'"
+# Materialized-view refresh pipelines are Databricks-managed housekeeping, not
+# user-authored ETL — including them would swamp the real pipeline signal.
+EXCLUDE_MV_PIPELINE_SQL = "name NOT RLIKE '^MV-'"
+
+
+def run(sql: str) -> None:
+    spark.sql(sql)
+
+
+def show_count(table: str) -> None:
+    n = spark.table(f"{FQ}.`{table}`").count()
+    print(f"  ✓ {table:30s}  rows={n:>6,}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RAW TABLES — direct extracts from Unity Catalog system tables
+# ═══════════════════════════════════════════════════════════════════════════
+
+print("=== raw_ws_tables (system.information_schema.tables) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_tables` COMMENT 'Real UC table inventory, excluding this project''s own schemas' AS
+SELECT
+  md5(concat(table_catalog, '.', table_schema, '.', table_name)) AS table_id,
+  table_name,
+  table_catalog AS catalog_name,
+  table_schema  AS schema_name,
+  CASE
+    WHEN table_schema RLIKE '(?i)(^|_)(bronze|raw)(_|$)' OR table_name RLIKE '(?i)^(raw_|bronze_)' THEN 'bronze'
+    WHEN table_schema RLIKE '(?i)(^|_)(silver|clean|curated)(_|$)' OR table_name RLIKE '(?i)^silver_' THEN 'silver'
+    WHEN table_schema RLIKE '(?i)(^|_)(gold|mart)(_|$)' OR table_name RLIKE '(?i)^gold_' THEN 'gold'
+    ELSE 'unclassified'
+  END AS data_layer,
+  table_owner AS owner_email,
+  (table_owner IS NOT NULL AND table_owner RLIKE '@') AS has_owner_tag,
+  created AS created_at,
+  last_altered AS last_ddl_at,
+  comment AS table_comment,
+  NOT (table_name RLIKE '^[a-z][a-z0-9_]*$') AS naming_violation,
+  CAST(NULL AS BIGINT) AS row_count_approx
+FROM system.information_schema.tables
+WHERE table_catalog NOT IN {EXCLUDE_CATALOGS_SQL}
+  AND table_schema != 'information_schema'
+  AND {not_project_scope('table_catalog', 'table_schema')}
+""")
+show_count("raw_ws_tables")
+
+print("\n=== raw_ws_pipelines (system.lakeflow.pipelines + pipeline_update_timeline) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_pipelines` COMMENT 'Real DLT/Lakeflow pipelines, excluding MV-refresh housekeeping pipelines' AS
+WITH latest_pipelines AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY pipeline_id ORDER BY change_time DESC) AS rn
+  FROM system.lakeflow.pipelines
+  WHERE delete_time IS NULL
+),
+runs_30d AS (
+  SELECT pipeline_id,
+    COUNT(*) AS total_runs,
+    SUM(CASE WHEN result_state IN ('FAILED', 'CANCELED') THEN 1 ELSE 0 END) AS failed_runs,
+    MAX(period_start_time) AS last_run_time,
+    AVG(CAST(period_end_time AS DOUBLE) - CAST(period_start_time AS DOUBLE)) AS avg_duration
+  FROM system.lakeflow.pipeline_update_timeline
+  WHERE period_start_time >= CURRENT_DATE() - INTERVAL 30 DAYS
+  GROUP BY pipeline_id
 )
-_save(pipes_df, "raw_ws_pipelines")
+SELECT
+  p.pipeline_id,
+  p.name AS pipeline_name,
+  p.run_as AS owner_email,
+  (p.run_as IS NOT NULL AND p.run_as RLIKE '@') AS has_owner_tag,
+  NOT (p.name RLIKE '(?i)(test|tutorial|demo|dev[_-])') AS is_production,
+  'unknown' AS schedule_type,
+  CAST(NULL AS BOOLEAN) AS has_dq_expectations,
+  CAST(NULL AS BOOLEAN) AS uses_hardcoded_paths,
+  CASE WHEN COALESCE(r.failed_runs, 0) > 0 THEN 'failed'
+       WHEN COALESCE(r.total_runs, 0) > 0 THEN 'succeeded'
+       ELSE 'unknown' END AS last_run_status,
+  CAST(r.last_run_time AS DATE) AS last_run_date,
+  CAST(r.avg_duration AS INT) AS avg_duration_sec,
+  ROUND(COALESCE(r.failed_runs, 0) / NULLIF(r.total_runs, 0), 3) AS failure_rate_30d,
+  COALESCE(p.create_time, p.change_time) AS created_at
+FROM latest_pipelines p
+LEFT JOIN runs_30d r ON p.pipeline_id = r.pipeline_id
+WHERE p.rn = 1 AND {EXCLUDE_MV_PIPELINE_SQL}
+""")
+show_count("raw_ws_pipelines")
 
-print(f"  → no_owner_count={no_owner_count}, no_owner_prod_count={no_owner_prod_count}")
-
-# ── 3. raw_ws_jobs ────────────────────────────────────────────────────────────
-print("Generating raw_ws_jobs …")
-
-job_names = [f"job_{i:04d}" for i in range(80)]
-job_names[:10] = [
-    "daily_etl_orchestrator", "nightly_ml_training", "weekly_report_gen",
-    "feature_store_refresh", "model_scoring_batch", "data_quality_check",
-    "archive_old_data", "cost_allocation_run", "compliance_export", "backup_metadata",
-]
-jobs_rows = []
-for i, jname in enumerate(job_names):
-    has_owner = random.random() < 0.82
-    owner = random.choice(ENGINEERS) if has_owner else None
-    cluster_type = "classic" if random.random() < 0.35 else "serverless"
-    jobs_rows.append((
-        f"JOB-{i:06d}", jname, owner, has_owner, cluster_type,
-        _ts(random.randint(60, 540)),
-    ))
-
-jobs_df = spark.createDataFrame(
-    jobs_rows,
-    "job_id string, job_name string, owner_email string, has_owner_tag boolean, cluster_type string, created_at string",
-).select(
-    "job_id", "job_name", "owner_email", "has_owner_tag", "cluster_type",
-    F.to_timestamp("created_at").alias("created_at"),
+print("\n=== raw_ws_jobs (system.lakeflow.jobs) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_jobs` COMMENT 'Real Databricks Jobs, excluding this bundle''s own setup job' AS
+WITH latest_jobs AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY change_time DESC) AS rn
+  FROM system.lakeflow.jobs
+  WHERE delete_time IS NULL
 )
-_save(jobs_df, "raw_ws_jobs")
+SELECT
+  job_id,
+  name AS job_name,
+  COALESCE(creator_user_name, creator_id) AS owner_email,
+  (creator_user_name IS NOT NULL AND creator_user_name RLIKE '@') AS has_owner_tag,
+  trigger.schedule.quartz_cron_expression AS schedule_cron,
+  'unknown' AS cluster_type,
+  COALESCE(create_time, change_time) AS created_at
+FROM latest_jobs
+WHERE rn = 1 AND {EXCLUDE_JOB_NAME_SQL}
+""")
+show_count("raw_ws_jobs")
 
-# ── 4. raw_ws_job_runs ────────────────────────────────────────────────────────
-print("Generating raw_ws_job_runs …")
+print("\n=== raw_ws_job_runs (system.lakeflow.job_run_timeline) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_job_runs` COMMENT 'Real job run history, 90 days' AS
+SELECT
+  rt.run_id,
+  rt.job_id,
+  CAST(NULL AS STRING) AS pipeline_id,
+  rt.period_start_time AS start_time,
+  rt.period_end_time AS end_time,
+  LOWER(COALESCE(rt.result_state, 'unknown')) AS status,
+  CAST(rt.run_duration_seconds AS INT) AS duration_sec,
+  LOWER(COALESCE(rt.trigger_type, 'unknown')) AS triggered_by
+FROM system.lakeflow.job_run_timeline rt
+JOIN {FQ}.`raw_ws_jobs` j ON rt.job_id = j.job_id
+WHERE rt.period_start_time >= CURRENT_DATE() - INTERVAL 90 DAYS
+""")
+show_count("raw_ws_job_runs")
 
-# ~500 runs over 90 days. Critical pipelines have 40%+ failure rates.
-CRITICAL_PIPE_IDS = {
-    pname: f"PIPE-{i:06d}"
-    for i, pname in enumerate(all_pipe_names[:40])
-    if pname in CRITICAL_PIPES
-}
+print("\n=== raw_ws_audit_events (real direct/ad-hoc writes, system.access.table_lineage) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_audit_events` COMMENT 'Real writes NOT triggered by a governed job or pipeline (entity_type NULL/NOTEBOOK/DBSQL_QUERY), 90 days' AS
+SELECT
+  md5(concat(COALESCE(l.entity_run_id, ''), l.target_table_full_name, CAST(l.event_time AS STRING))) AS event_id,
+  l.event_time,
+  l.created_by AS user_email,
+  'DIRECT_WRITE' AS action_type,
+  md5(l.target_table_full_name) AS table_id,
+  l.target_table_name AS table_name,
+  COALESCE(t.data_layer, 'unclassified') AS data_layer,
+  CAST(NULL AS BIGINT) AS bytes_affected,
+  CONCAT('Write via ', COALESCE(l.entity_type, 'ad-hoc query'), ' — not a governed job or pipeline run') AS query_snippet
+FROM system.access.table_lineage l
+LEFT JOIN {FQ}.`raw_ws_tables` t
+  ON t.catalog_name = l.target_table_catalog AND t.schema_name = l.target_table_schema AND t.table_name = l.target_table_name
+WHERE l.target_table_full_name IS NOT NULL
+  AND (l.entity_type IS NULL OR l.entity_type IN ('NOTEBOOK', 'DBSQL_QUERY'))
+  AND l.event_time >= CURRENT_DATE() - INTERVAL 90 DAYS
+  AND l.target_table_catalog NOT IN {EXCLUDE_CATALOGS_SQL}
+  AND {not_project_scope('l.target_table_catalog', 'l.target_table_schema')}
+""")
+show_count("raw_ws_audit_events")
 
-runs_rows = []
-run_id = 0
-# Generate runs for each pipeline — more runs for critical ones
-for i, pname in enumerate(all_pipe_names):
-    pipe_id = f"PIPE-{i:06d}"
-    n_runs = random.randint(5, 12)
-    is_critical = pname in CRITICAL_PIPES
-    fail_rate = CRITICAL_PIPES[pname][4] if is_critical else random.uniform(0.02, 0.2)
-
-    for r in range(n_runs):
-        days_back = random.randint(0, 89)
-        duration = random.randint(60, 7200)
-        rand_val = random.random()
-        status = (
-            "failed" if rand_val < fail_rate else
-            "cancelled" if rand_val < fail_rate + 0.08 else
-            "succeeded"
-        )
-        trigger = random.choice(["schedule", "schedule", "schedule", "manual", "api"])
-        runs_rows.append((
-            f"RUN-{run_id:08d}", pipe_id, _ts(days_back, jitter_hours=12),
-            _ts(days_back, jitter_hours=12),  # end_time approximate
-            status, duration, trigger,
-        ))
-        run_id += 1
-        if run_id >= 520:
-            break
-    if run_id >= 520:
-        break
-
-runs_df = spark.createDataFrame(
-    runs_rows,
-    "run_id string, pipeline_id string, start_time string, end_time string, "
-    "status string, duration_sec int, triggered_by string",
-).select(
-    "run_id", "pipeline_id",
-    F.to_timestamp("start_time").alias("start_time"),
-    F.to_timestamp("end_time").alias("end_time"),
-    "status", "duration_sec", "triggered_by",
+print("\n=== raw_ws_ml_experiments (system.mlflow.experiments_latest + runs_latest) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_ml_experiments` COMMENT 'Real MLflow experiments' AS
+WITH last_runs AS (
+  SELECT experiment_id, MAX(start_time) AS last_run_time
+  FROM system.mlflow.runs_latest
+  WHERE delete_time IS NULL
+  GROUP BY experiment_id
 )
-_save(runs_df, "raw_ws_job_runs")
+SELECT
+  e.experiment_id,
+  e.name AS experiment_name,
+  regexp_extract(e.name, '^/Users/([^/]+)/', 1) AS owner_email,
+  e.name AS workspace_path,
+  CAST(COALESCE(lr.last_run_time, e.create_time) AS DATE) AS last_run_date,
+  COALESCE(lr.last_run_time, e.create_time) < CURRENT_DATE() - INTERVAL 30 DAYS AS is_stale,
+  CAST(NULL AS BOOLEAN) AS has_registered_model,
+  CAST(NULL AS BOOLEAN) AS has_description,
+  e.create_time AS created_at
+FROM system.mlflow.experiments_latest e
+LEFT JOIN last_runs lr ON e.experiment_id = lr.experiment_id
+WHERE e.delete_time IS NULL
+""")
+show_count("raw_ws_ml_experiments")
 
-# ── 5. raw_ws_audit_events ────────────────────────────────────────────────────
-print("Generating raw_ws_audit_events …")
+print("\n=== raw_ws_ml_models (system.serving.served_entities, CUSTOM_MODEL only) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`raw_ws_ml_models` COMMENT 'Real custom-model serving endpoints (excludes Databricks built-in foundation models)' AS
+SELECT
+  se.served_entity_id AS model_id,
+  se.entity_name AS model_name,
+  se.endpoint_name AS serving_endpoint_name,
+  CAST(NULL AS STRING) AS upstream_features_table,
+  CAST(NULL AS STRING) AS features_table_layer,
+  CAST(NULL AS DATE) AS last_training_date,
+  CAST(NULL AS DATE) AS features_last_modified_date,
+  CAST(false AS BOOLEAN) AS is_serving_stale_features,
+  se.created_by AS owner_email,
+  CAST(true AS BOOLEAN) AS registered_in_uc
+FROM system.serving.served_entities se
+WHERE se.entity_type = 'CUSTOM_MODEL'
+""")
+show_count("raw_ws_ml_models")
 
-# Distribution per table: (table_name, edit_count)
-AUDIT_DIST = [(r[0], r[1]) for r in BRONZE_EDITED]
+# ═══════════════════════════════════════════════════════════════════════════
+# GOLD TABLES — derived real metrics (dashboard + Genie read these)
+# ═══════════════════════════════════════════════════════════════════════════
 
-QUERY_SNIPPETS = {
-    "INSERT": "INSERT INTO {table} SELECT * FROM staging_temp WHERE ...",
-    "UPDATE": "UPDATE {table} SET status = 'processed', updated_at = NOW() WHERE ...",
-    "DELETE": "DELETE FROM {table} WHERE created_at < DATEADD(day, -90, NOW())",
-    "MERGE":  "MERGE INTO {table} t USING source s ON t.id = s.id WHEN MATCHED THEN ...",
-    "TRUNCATE": "TRUNCATE TABLE {table}",
-}
-
-audit_rows = []
-evt_id = 0
-for tname, count in AUDIT_DIST:
-    for _ in range(count):
-        days_back = random.randint(0, 89)
-        action = random.choices(DML_TYPES, weights=DML_WEIGHTS)[0]
-        user = random.choice(ENGINEERS)
-        snippet = QUERY_SNIPPETS[action].format(table=tname)[:120]
-        audit_rows.append((
-            f"EVT-{evt_id:08d}",
-            _ts(days_back, jitter_hours=8),
-            user, action, tname, "bronze",
-            random.randint(1000, 5000000),
-            snippet,
-        ))
-        evt_id += 1
-
-audit_df = spark.createDataFrame(
-    audit_rows,
-    "event_id string, event_time string, user_email string, action_type string, "
-    "table_name string, data_layer string, bytes_affected long, query_snippet string",
-).select(
-    "event_id",
-    F.to_timestamp("event_time").alias("event_time"),
-    "user_email", "action_type", "table_name", "data_layer",
-    "bytes_affected", "query_snippet",
+print("\n=== gold_bronze_table_edits (real direct-write frequency + real downstream lineage) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`gold_bronze_table_edits`
+COMMENT 'Tables with real direct/ad-hoc writes outside governed jobs/pipelines. estimated_rerun_cost_usd is NULL: no real cost signal exists.'
+AS
+WITH edits AS (
+  SELECT
+    table_name,
+    COUNT(*) AS edit_count_90d,
+    MAX_BY(user_email, event_time) AS last_editor_email,
+    MAX(event_time) AS last_edit_time,
+    'DIRECT_WRITE' AS last_action_type
+  FROM {FQ}.`raw_ws_audit_events`
+  GROUP BY table_name
+),
+downstream AS (
+  SELECT
+    source_table_name AS table_name,
+    COUNT(DISTINCT target_table_full_name) AS downstream_table_count,
+    CONCAT_WS(',', COLLECT_SET(target_table_name)) AS downstream_tables
+  FROM system.access.table_lineage
+  WHERE source_table_full_name IS NOT NULL AND target_table_full_name IS NOT NULL
+    AND event_time >= CURRENT_DATE() - INTERVAL 90 DAYS
+    AND source_table_catalog NOT IN {EXCLUDE_CATALOGS_SQL}
+    AND {not_project_scope('source_table_catalog', 'source_table_schema')}
+  GROUP BY source_table_name
 )
-_save(audit_df, "raw_ws_audit_events")
+SELECT
+  e.table_name,
+  CAST(NULL AS STRING) AS catalog_schema,
+  e.edit_count_90d,
+  e.last_editor_email,
+  CAST(e.last_edit_time AS DATE) AS last_edit_date,
+  e.last_action_type,
+  COALESCE(d.downstream_table_count, 0) AS downstream_gold_table_count,
+  d.downstream_tables AS downstream_gold_tables,
+  CAST(NULL AS DECIMAL(10,2)) AS estimated_rerun_cost_usd,
+  CASE WHEN e.edit_count_90d > 5 OR COALESCE(d.downstream_table_count, 0) > 0 THEN 'critical' ELSE 'high' END AS severity
+FROM edits e
+LEFT JOIN downstream d ON e.table_name = d.table_name
+ORDER BY e.edit_count_90d DESC
+""")
+show_count("gold_bronze_table_edits")
 
-# ── 6. raw_ws_ml_experiments ──────────────────────────────────────────────────
-print("Generating raw_ws_ml_experiments …")
+print("\n=== gold_pipeline_health ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`gold_pipeline_health`
+COMMENT 'Real pipeline ownership + 30-day failure rate. anti_pattern_count only counts unowned (DQ-expectations/hardcoded-paths are not measurable here).'
+AS
+SELECT
+  pipeline_id,
+  pipeline_name,
+  owner_email,
+  has_owner_tag,
+  is_production,
+  has_dq_expectations,
+  uses_hardcoded_paths,
+  COALESCE(failure_rate_30d, 0.0) AS failure_rate_30d,
+  avg_duration_sec,
+  CAST(CASE WHEN NOT has_owner_tag THEN 1 ELSE 0 END AS INT) AS anti_pattern_count,
+  CASE
+    WHEN COALESCE(failure_rate_30d, 0.0) > 0.35 OR (NOT has_owner_tag AND is_production) THEN 'critical'
+    WHEN COALESCE(failure_rate_30d, 0.0) > 0.15 THEN 'warning'
+    ELSE 'healthy'
+  END AS health_status
+FROM {FQ}.`raw_ws_pipelines`
+""")
+show_count("gold_pipeline_health")
 
-exp_domains = [
-    "churn_prediction", "revenue_forecast", "lead_scoring", "fraud_detection",
-    "product_recommendation", "demand_forecast", "customer_segmentation",
-    "price_optimization", "sentiment_analysis", "anomaly_detection",
-    "ltv_prediction", "next_best_action",
-]
-exps_rows = []
-for i in range(60):
-    domain = exp_domains[i % len(exp_domains)]
-    version = (i // len(exp_domains)) + 1
-    name = f"{domain}_v{version}"
-    has_owner = random.random() < 0.75
-    owner = random.choice(ENGINEERS) if has_owner else None
-    days_since_run = random.randint(0, 90)
-    is_stale = days_since_run > 30
-    has_model = random.random() < 0.55
-    has_desc = random.random() < 0.65
-    user_slug = owner.split("@")[0].replace(".", "_") if owner else "service_account"
-    exps_rows.append((
-        f"EXP-{i:06d}", name, owner,
-        f"/Users/{user_slug}/ml/{name}",
-        _date(days_since_run), is_stale, has_model, has_desc,
-        _ts(random.randint(90, 540)),
-    ))
+print("\n=== gold_ownership_trend (single real current-state row — no fabricated history) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`gold_ownership_trend`
+COMMENT 'Real current ownership coverage across pipelines + jobs. Unity Catalog exposes current state only, not daily history, so this is ONE row (today), not a 30-day series.'
+AS
+SELECT
+  CURRENT_DATE() AS report_date,
+  COUNT(*) AS total_production_pipelines,
+  SUM(CASE WHEN has_owner_tag THEN 1 ELSE 0 END) AS owned_production_pipelines,
+  ROUND(100.0 * SUM(CASE WHEN has_owner_tag THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2) AS ownership_coverage_pct,
+  CAST(95.0 AS DOUBLE) AS goal_pct
+FROM {FQ}.`raw_ws_pipelines`
+WHERE is_production = TRUE
+""")
+show_count("gold_ownership_trend")
 
-exps_df = spark.createDataFrame(
-    exps_rows,
-    "experiment_id string, experiment_name string, owner_email string, "
-    "workspace_path string, last_run_date string, is_stale boolean, "
-    "has_registered_model boolean, has_description boolean, created_at string",
-).select(
-    "experiment_id", "experiment_name", "owner_email", "workspace_path",
-    F.to_date("last_run_date").alias("last_run_date"),
-    "is_stale", "has_registered_model", "has_description",
-    F.to_timestamp("created_at").alias("created_at"),
+print("\n=== gold_remediation_backlog (real findings only — no invented $ impact or effort sizing) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`gold_remediation_backlog`
+COMMENT 'Real findings only. business_impact_usd and sprint_estimate_days are NULL: neither is measurable from system tables.'
+AS
+WITH direct_write_findings AS (
+  SELECT
+    table_name AS asset_name,
+    'table' AS asset_type,
+    'ETL Hygiene' AS category,
+    severity,
+    CONCAT(CAST(edit_count_90d AS STRING), ' direct/ad-hoc write(s) in 90 days — bypasses governed jobs/pipelines',
+           CASE WHEN downstream_gold_table_count > 0
+                THEN CONCAT('; ', CAST(downstream_gold_table_count AS STRING), ' downstream table(s) depend on it')
+                ELSE '' END) AS description,
+    last_editor_email AS owner_email,
+    CONCAT('Route writes through a governed job/pipeline; revoke ad-hoc write access if unintended') AS recommended_action,
+    last_edit_date AS detected_at
+  FROM {FQ}.`gold_bronze_table_edits`
+),
+pipeline_failure_findings AS (
+  SELECT
+    pipeline_name AS asset_name,
+    'pipeline' AS asset_type,
+    'ETL Hygiene' AS category,
+    CASE WHEN failure_rate_30d > 0.35 THEN 'critical' ELSE 'high' END AS severity,
+    CONCAT(CAST(ROUND(failure_rate_30d * 100) AS STRING), '% failure rate over 30 days') AS description,
+    owner_email,
+    'Investigate recent failures; add alerting on repeated failure' AS recommended_action,
+    last_run_date AS detected_at
+  FROM {FQ}.`raw_ws_pipelines`
+  WHERE failure_rate_30d > 0.15
+),
+unowned_pipeline_findings AS (
+  SELECT
+    pipeline_name AS asset_name,
+    'pipeline' AS asset_type,
+    'Ownership & Access' AS category,
+    CASE WHEN is_production THEN 'critical' ELSE 'high' END AS severity,
+    CONCAT('No identifiable owner (run_as = ', COALESCE(owner_email, 'unknown'), ')',
+           CASE WHEN is_production THEN ' — runs in production' ELSE '' END) AS description,
+    owner_email,
+    'Assign a real owner (run_as identity) to this pipeline' AS recommended_action,
+    CAST(created_at AS DATE) AS detected_at
+  FROM {FQ}.`raw_ws_pipelines`
+  WHERE NOT has_owner_tag
+),
+unowned_job_findings AS (
+  SELECT
+    job_name AS asset_name,
+    'job' AS asset_type,
+    'Ownership & Access' AS category,
+    'medium' AS severity,
+    CONCAT('No identifiable creator (creator = ', COALESCE(owner_email, 'unknown'), ')') AS description,
+    owner_email,
+    'Assign a real creator/owner to this job' AS recommended_action,
+    CAST(created_at AS DATE) AS detected_at
+  FROM {FQ}.`raw_ws_jobs`
+  WHERE NOT has_owner_tag
+),
+stale_experiment_findings AS (
+  SELECT
+    experiment_name AS asset_name,
+    'ml_experiment' AS asset_type,
+    'ML/AI Governance' AS category,
+    'medium' AS severity,
+    CONCAT('No runs in the last 30+ days (last run ', CAST(last_run_date AS STRING), ')') AS description,
+    owner_email,
+    'Archive if abandoned, or re-run and document current status' AS recommended_action,
+    last_run_date AS detected_at
+  FROM {FQ}.`raw_ws_ml_experiments`
+  WHERE is_stale
+),
+missing_comment_findings AS (
+  SELECT
+    table_name AS asset_name,
+    'table' AS asset_type,
+    'Data Quality' AS category,
+    'medium' AS severity,
+    'Table has no comment describing its contents/purpose' AS description,
+    owner_email,
+    'Add a table comment via ALTER TABLE ... SET COMMENT' AS recommended_action,
+    CAST(created_at AS DATE) AS detected_at
+  FROM {FQ}.`raw_ws_tables`
+  WHERE table_comment IS NULL
+),
+naming_violation_findings AS (
+  SELECT
+    table_name AS asset_name,
+    'table' AS asset_type,
+    'Data Quality' AS category,
+    'medium' AS severity,
+    'Table name does not follow lowercase snake_case naming convention' AS description,
+    owner_email,
+    'Rename to lowercase snake_case, or document the exception' AS recommended_action,
+    CAST(created_at AS DATE) AS detected_at
+  FROM {FQ}.`raw_ws_tables`
+  WHERE naming_violation
+),
+unioned AS (
+  SELECT * FROM direct_write_findings
+  UNION ALL SELECT * FROM pipeline_failure_findings
+  UNION ALL SELECT * FROM unowned_pipeline_findings
+  UNION ALL SELECT * FROM unowned_job_findings
+  UNION ALL SELECT * FROM stale_experiment_findings
+  UNION ALL SELECT * FROM missing_comment_findings
+  UNION ALL SELECT * FROM naming_violation_findings
 )
-_save(exps_df, "raw_ws_ml_experiments")
+SELECT
+  CONCAT('FND-', LPAD(CAST(ROW_NUMBER() OVER (ORDER BY severity, category, asset_name) AS STRING), 6, '0')) AS finding_id,
+  severity,
+  category,
+  asset_type,
+  asset_name,
+  owner_email,
+  description,
+  CAST(NULL AS DECIMAL(10,2)) AS business_impact_usd,
+  recommended_action,
+  COALESCE(detected_at, CURRENT_DATE()) AS detected_at,
+  CAST(NULL AS INT) AS sprint_estimate_days
+FROM unioned
+""")
+show_count("gold_remediation_backlog")
 
-# ── 7. raw_ws_ml_models ───────────────────────────────────────────────────────
-print("Generating raw_ws_ml_models …")
-
-model_names = [
-    "churn_classifier_v2", "revenue_forecaster", "lead_scorer", "fraud_detector_v3",
-    "product_recommender", "demand_planner", "customer_segmenter", "price_optimizer",
-    "sentiment_classifier", "anomaly_detector", "ltv_estimator", "nba_agent",
-    "retention_predictor", "upsell_scorer", "campaign_response", "risk_rater",
-    "approval_classifier", "document_extractor", "entity_tagger", "intent_classifier",
-    "next_action_predictor", "engagement_scorer", "health_index_model",
-    "feature_importance_tracker", "drift_detector", "bias_monitor",
-    "quality_gate_model", "sla_predictor", "capacity_forecaster", "cost_estimator",
-]
-
-# First 2 models are the "stale features" ones — read from ml_features_bronze
-STALE_MODELS = [("churn_classifier_v2", "ml_features_bronze"), ("retention_predictor", "ml_features_bronze")]
-
-models_rows = []
-for i, mname in enumerate(model_names):
-    if i < len(STALE_MODELS):
-        _, features_table = STALE_MODELS[i]
-        features_layer = "bronze"
-        # ml_features_bronze had 12 edits; last edit was recent
-        features_last_modified = _date(random.randint(5, 25))
-        is_stale_features = True
-        serving_endpoint = f"{mname.replace('_', '-')}-endpoint"
-    else:
-        features_table = random.choice(SILVER_TABLES[:20])
-        features_layer = "silver"
-        features_last_modified = _date(random.randint(30, 120))
-        is_stale_features = False
-        serving_endpoint = f"{mname.replace('_', '-')}-endpoint" if random.random() < 0.6 else None
-
-    owner = random.choice(ENGINEERS)
-    last_train = _date(random.randint(1, 45))
-    registered_in_uc = random.random() < 0.73
-    models_rows.append((
-        f"MDL-{i:06d}", mname, serving_endpoint, features_table, features_layer,
-        last_train, features_last_modified, is_stale_features, owner, registered_in_uc,
-    ))
-
-models_df = spark.createDataFrame(
-    models_rows,
-    "model_id string, model_name string, serving_endpoint_name string, "
-    "upstream_features_table string, features_table_layer string, "
-    "last_training_date string, features_last_modified_date string, "
-    "is_serving_stale_features boolean, owner_email string, registered_in_uc boolean",
-).select(
-    "model_id", "model_name", "serving_endpoint_name",
-    "upstream_features_table", "features_table_layer",
-    F.to_date("last_training_date").alias("last_training_date"),
-    F.to_date("features_last_modified_date").alias("features_last_modified_date"),
-    "is_serving_stale_features", "owner_email", "registered_in_uc",
+print("\n=== gold_health_scores (real scores; ETL Hygiene has a genuine 30-day rolling trend) ===")
+run(f"""
+CREATE OR REPLACE TABLE {FQ}.`gold_health_scores`
+COMMENT 'Real scores from measured signals. Only ETL Hygiene has real day-by-day history (rolled from timestamped lineage + run events); the other three dimensions are current-state snapshots and appear as a single row for today. score_delta_30d is NULL where no historical comparison is possible.'
+AS
+WITH date_spine AS (
+  SELECT explode(sequence(CURRENT_DATE() - INTERVAL 29 DAYS, CURRENT_DATE(), INTERVAL 1 DAY)) AS report_date
+),
+lineage_events AS (
+  SELECT event_time,
+         (entity_type IS NULL OR entity_type IN ('NOTEBOOK', 'DBSQL_QUERY')) AS is_adhoc
+  FROM system.access.table_lineage
+  WHERE target_table_full_name IS NOT NULL
+    AND event_time >= CURRENT_DATE() - INTERVAL 59 DAYS
+    AND target_table_catalog NOT IN {EXCLUDE_CATALOGS_SQL}
+    AND {not_project_scope('target_table_catalog', 'target_table_schema')}
+),
+pipeline_runs AS (
+  SELECT rt.period_start_time AS event_time,
+         (rt.result_state IN ('FAILED', 'CANCELED')) AS is_failed
+  FROM system.lakeflow.pipeline_update_timeline rt
+  WHERE rt.period_start_time >= CURRENT_DATE() - INTERVAL 59 DAYS
+),
+-- Rolling 30-day window ending on each date_spine day, computed from real events.
+etl_daily AS (
+  SELECT
+    d.report_date,
+    SUM(CASE WHEN l.event_time BETWEEN d.report_date - INTERVAL 29 DAYS AND d.report_date THEN 1 ELSE 0 END) AS total_writes,
+    SUM(CASE WHEN l.event_time BETWEEN d.report_date - INTERVAL 29 DAYS AND d.report_date AND l.is_adhoc THEN 1 ELSE 0 END) AS adhoc_writes
+  FROM date_spine d
+  LEFT JOIN lineage_events l ON true
+  GROUP BY d.report_date
+),
+etl_daily_runs AS (
+  SELECT
+    d.report_date,
+    SUM(CASE WHEN r.event_time BETWEEN d.report_date - INTERVAL 29 DAYS AND d.report_date THEN 1 ELSE 0 END) AS total_runs,
+    SUM(CASE WHEN r.event_time BETWEEN d.report_date - INTERVAL 29 DAYS AND d.report_date AND r.is_failed THEN 1 ELSE 0 END) AS failed_runs
+  FROM date_spine d
+  LEFT JOIN pipeline_runs r ON true
+  GROUP BY d.report_date
+),
+etl_scores AS (
+  SELECT
+    w.report_date,
+    ROUND(100 * (1 - COALESCE(w.adhoc_writes / NULLIF(w.total_writes, 0), 0))
+              * (1 - LEAST(COALESCE(r.failed_runs / NULLIF(r.total_runs, 0), 0), 1))) AS score
+  FROM etl_daily w
+  JOIN etl_daily_runs r ON w.report_date = r.report_date
+),
+-- Current-state (non-time-series) dimensions, computed once for "today".
+ownership_now AS (
+  SELECT ROUND(100.0 * AVG(CASE WHEN has_owner_tag THEN 1.0 ELSE 0.0 END)) AS score
+  FROM (
+    SELECT has_owner_tag FROM {FQ}.`raw_ws_pipelines`
+    UNION ALL
+    SELECT has_owner_tag FROM {FQ}.`raw_ws_jobs`
+  )
+),
+ml_now AS (
+  SELECT CASE WHEN COUNT(*) = 0 THEN 100
+              ELSE ROUND(100.0 * SUM(CASE WHEN NOT is_stale THEN 1 ELSE 0 END) / COUNT(*))
+         END AS score
+  FROM {FQ}.`raw_ws_ml_experiments`
+),
+dq_now AS (
+  SELECT ROUND(100.0 * AVG(
+           (CASE WHEN table_comment IS NOT NULL THEN 1.0 ELSE 0.0 END +
+            CASE WHEN NOT naming_violation THEN 1.0 ELSE 0.0 END) / 2.0
+         )) AS score
+  FROM {FQ}.`raw_ws_tables`
+),
+backlog_counts AS (
+  SELECT
+    CASE category
+      WHEN 'ETL Hygiene' THEN 'etl_hygiene'
+      WHEN 'Ownership & Access' THEN 'ownership_access'
+      WHEN 'ML/AI Governance' THEN 'ml_ai_governance'
+      WHEN 'Data Quality' THEN 'data_quality'
+    END AS dimension,
+    SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) AS critical_count,
+    SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) AS high_count,
+    SUM(CASE WHEN severity = 'medium' THEN 1 ELSE 0 END) AS medium_count
+  FROM {FQ}.`gold_remediation_backlog`
+  GROUP BY category
 )
-_save(models_df, "raw_ws_ml_models")
+SELECT
+  e.report_date,
+  'etl_hygiene' AS dimension,
+  e.score,
+  e.score - LAG(e.score, 30) OVER (ORDER BY e.report_date) AS score_delta_30d,
+  COALESCE(bc.critical_count, 0) AS critical_count,
+  COALESCE(bc.high_count, 0) AS high_count,
+  COALESCE(bc.medium_count, 0) AS medium_count
+FROM etl_scores e
+LEFT JOIN backlog_counts bc ON bc.dimension = 'etl_hygiene'
 
-# ── Gold tables ───────────────────────────────────────────────────────────────
-print("\nBuilding gold tables …")
+UNION ALL
 
-# ── gold_bronze_table_edits (derived from BRONZE_EDITED + raw_ws_audit_events) ─
-print("Building gold_bronze_table_edits …")
+SELECT CURRENT_DATE(), 'ownership_access', o.score, CAST(NULL AS INT),
+       COALESCE(bc.critical_count, 0), COALESCE(bc.high_count, 0), COALESCE(bc.medium_count, 0)
+FROM ownership_now o LEFT JOIN backlog_counts bc ON bc.dimension = 'ownership_access'
 
-# Build gold_bronze_table_edits directly from Python (all data pre-defined in BRONZE_EDITED).
-bronze_edit_rows = []
-for tname, edit_count, dl_count, dl_tables, rerun_cost, is_critical in BRONZE_EDITED:
-    # Find the most recent event for this table
-    last_editor = random.choice(ENGINEERS)
-    last_edit_days = random.randint(1, 30)
-    last_action = random.choices(DML_TYPES[:4], weights=[0.4, 0.3, 0.1, 0.2])[0]
-    severity = "critical" if is_critical else "high"
-    bronze_edit_rows.append((
-        tname, f"main.main_bronze",
-        edit_count, last_editor, _date(last_edit_days), last_action,
-        dl_count, dl_tables, decimal.Decimal(str(rerun_cost)), severity,
-    ))
+UNION ALL
 
-bronze_edits_df = spark.createDataFrame(
-    bronze_edit_rows,
-    StructType([
-        StructField("table_name", StringType(), False),
-        StructField("catalog_schema", StringType(), False),
-        StructField("edit_count_90d", IntegerType(), False),
-        StructField("last_editor_email", StringType(), False),
-        StructField("last_edit_date", StringType(), False),
-        StructField("last_action_type", StringType(), False),
-        StructField("downstream_gold_table_count", IntegerType(), False),
-        StructField("downstream_gold_tables", StringType(), False),
-        StructField("estimated_rerun_cost_usd", DecimalType(10, 2), False),
-        StructField("severity", StringType(), False),
-    ])
-).select(
-    "table_name", "catalog_schema", "edit_count_90d", "last_editor_email",
-    F.to_date("last_edit_date").alias("last_edit_date"),
-    "last_action_type", "downstream_gold_table_count", "downstream_gold_tables",
-    "estimated_rerun_cost_usd", "severity",
-)
-_save(bronze_edits_df, "gold_bronze_table_edits")
+SELECT CURRENT_DATE(), 'ml_ai_governance', m.score, CAST(NULL AS INT),
+       COALESCE(bc.critical_count, 0), COALESCE(bc.high_count, 0), COALESCE(bc.medium_count, 0)
+FROM ml_now m LEFT JOIN backlog_counts bc ON bc.dimension = 'ml_ai_governance'
 
-# ── gold_pipeline_health ──────────────────────────────────────────────────────
-print("Building gold_pipeline_health …")
+UNION ALL
 
-spark.sql(f"""
-    CREATE OR REPLACE TABLE {CATALOG}.{SCHEMA}.gold_pipeline_health
-    COMMENT 'Pipeline health: ownership, DQ coverage, failure rates, anti-pattern count. One row per pipeline. Drives the ETL Hygiene deep-dive page.'
-    AS
-    SELECT
-      p.pipeline_id,
-      p.pipeline_name,
-      p.owner_email,
-      p.has_owner_tag,
-      p.is_production,
-      p.has_dq_expectations,
-      NOT p.has_clean_paths AS uses_hardcoded_paths,
-      COALESCE(ROUND(failed_runs * 1.0 / NULLIF(total_runs, 0), 3), 0.0) AS failure_rate_30d,
-      p.avg_duration_sec,
-      (CASE WHEN NOT p.has_owner_tag THEN 1 ELSE 0 END +
-       CASE WHEN NOT p.has_dq_expectations THEN 1 ELSE 0 END +
-       CASE WHEN NOT p.has_clean_paths THEN 1 ELSE 0 END) AS anti_pattern_count,
-      CASE
-        WHEN COALESCE(failed_runs * 1.0 / NULLIF(total_runs, 0), 0) > 0.35 THEN 'critical'
-        WHEN COALESCE(failed_runs * 1.0 / NULLIF(total_runs, 0), 0) > 0.15
-          OR NOT p.has_owner_tag THEN 'warning'
-        ELSE 'healthy'
-      END AS health_status
-    FROM {CATALOG}.{SCHEMA}.raw_ws_pipelines p
-    LEFT JOIN (
-      SELECT pipeline_id,
-             COUNT(*) AS total_runs,
-             SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_runs
-      FROM {CATALOG}.{SCHEMA}.raw_ws_job_runs
-      GROUP BY pipeline_id
-    ) r ON p.pipeline_id = r.pipeline_id
+SELECT CURRENT_DATE(), 'data_quality', q.score, CAST(NULL AS INT),
+       COALESCE(bc.critical_count, 0), COALESCE(bc.high_count, 0), COALESCE(bc.medium_count, 0)
+FROM dq_now q LEFT JOIN backlog_counts bc ON bc.dimension = 'data_quality'
 """)
 
-# ── gold_health_scores (synthetic scores, not derived from raw) ───────────────
-print("Building gold_health_scores …")
+print("\n=== gold_health_scores: adding 'overall' as the average of today's 4 dimensions ===")
+run(f"""
+INSERT INTO {FQ}.`gold_health_scores`
+SELECT
+  CURRENT_DATE() AS report_date,
+  'overall' AS dimension,
+  ROUND(AVG(score)) AS score,
+  CAST(NULL AS INT) AS score_delta_30d,
+  SUM(critical_count) AS critical_count,
+  SUM(high_count) AS high_count,
+  SUM(medium_count) AS medium_count
+FROM {FQ}.`gold_health_scores`
+WHERE report_date = CURRENT_DATE()
+""")
+show_count("gold_health_scores")
 
-# Scores over 30 days. Target today's values and interpolate backward.
-SCORE_TARGETS_TODAY = {
-    "overall": (68, -3),
-    "etl_hygiene": (55, -5),
-    "ml_ai_governance": (62, 2),
-    "ownership_access": (71, 8),
-    "data_quality": (78, 1),
-}
-
-score_rows = []
-for dim, (score_today, delta_30d) in SCORE_TARGETS_TODAY.items():
-    score_30d_ago = score_today - delta_30d
-    for day_back in range(30, -1, -1):
-        progress = 1.0 - (day_back / 30.0)
-        score = round(score_30d_ago + (score_today - score_30d_ago) * progress + random.uniform(-0.8, 0.8))
-        score = max(40, min(100, score))
-        report_dt = (NOW - timedelta(days=day_back)).strftime("%Y-%m-%d")
-        # Critical/high/medium counts roughly inverse to score
-        crit = max(0, round(8 - (score - 50) * 0.08 + random.uniform(-0.5, 0.5)))
-        high = max(0, round(15 - (score - 50) * 0.10 + random.uniform(-1, 1)))
-        med = max(0, round(30 - (score - 50) * 0.15 + random.uniform(-2, 2)))
-        if dim == "overall":
-            crit = max(0, round(6 + (68 - score) * 0.2 + random.uniform(-0.3, 0.3)))
-            high = max(0, round(11 + (68 - score) * 0.3 + random.uniform(-0.5, 0.5)))
-            med = max(0, round(23 + (68 - score) * 0.4 + random.uniform(-1, 1)))
-        score_rows.append((report_dt, dim, score, delta_30d, crit, high, med))
-
-scores_df = spark.createDataFrame(
-    score_rows,
-    "report_date string, dimension string, score int, score_delta_30d int, "
-    "critical_count int, high_count int, medium_count int",
-).select(
-    F.to_date("report_date").alias("report_date"),
-    "dimension", "score", "score_delta_30d", "critical_count", "high_count", "medium_count",
-)
-_save(scores_df, "gold_health_scores")
-
-# ── gold_ownership_trend ──────────────────────────────────────────────────────
-print("Building gold_ownership_trend …")
-
-# 30-day trend: starts at ~58%, trends to ~69%
-trend_rows = []
-for day_back in range(30, -1, -1):
-    progress = 1.0 - (day_back / 30.0)
-    coverage = round(58.0 + (69.0 - 58.0) * progress + random.uniform(-0.5, 0.5), 2)
-    owned = round(60 * coverage / 100)
-    report_dt = (NOW - timedelta(days=day_back)).strftime("%Y-%m-%d")
-    trend_rows.append((report_dt, 60, owned, coverage, 95.0))
-
-trend_df = spark.createDataFrame(
-    trend_rows,
-    "report_date string, total_production_pipelines int, owned_production_pipelines int, "
-    "ownership_coverage_pct double, goal_pct double",
-).select(
-    F.to_date("report_date").alias("report_date"),
-    "total_production_pipelines", "owned_production_pipelines",
-    "ownership_coverage_pct", "goal_pct",
-)
-_save(trend_df, "gold_ownership_trend")
-
-# ── gold_remediation_backlog ──────────────────────────────────────────────────
-print("Building gold_remediation_backlog …")
-
-REMEDIATION_FINDINGS = [
-    # Critical findings (6 total)
-    ("FND-000001", "critical", "ETL Hygiene", "table", "raw_transactions",
-     None, "47 direct DML writes in 90 days — bypasses all pipeline expectations and constraints",
-     34000.00, "Revoke direct write permissions; route all changes through pipeline with CONSTRAINT", 3),
-    ("FND-000002", "critical", "ETL Hygiene", "table", "ml_features_bronze",
-     None, "12 direct DML writes — 2 serving models reading stale features (churn_classifier_v2, retention_predictor)",
-     18000.00, "Audit model training pipeline; migrate features to silver layer before next retraining", 5),
-    ("FND-000003", "critical", "ETL Hygiene", "table", "customer_events_bronze",
-     None, "9 direct DML writes — downstream gold tables for executive weekly reports affected",
-     14000.00, "Revoke direct write permissions; add NOT NULL CONSTRAINT and DQ expectations", 3),
-    ("FND-000004", "critical", "Ownership & Access", "pipeline", "customer_churn_etl",
-     None, "No owner tag; 9 dependent pipelines and 2 ML models blocked when this fails",
-     12000.00, "Assign owner tag; notify engineering lead; add runbook link to pipeline config", 1),
-    ("FND-000005", "critical", "ETL Hygiene", "pipeline", "revenue_pipeline_v1",
-     None, "43% failure rate over 30 days; hardcoded S3 paths break on workspace migration",
-     9000.00, "Replace hardcoded paths with UC volume references; add alerting on failure", 4),
-    ("FND-000006", "critical", "ML/AI Governance", "ml_model", "churn_classifier_v2",
-     "alice.chen@company.com",
-     "Serving endpoint reads features from ml_features_bronze — a bronze table with 12 recent direct writes",
-     5000.00, "Retrain on silver_ml_features; add feature lineage check to CI/CD pipeline", 5),
-
-    # High findings (11 total)
-    ("FND-000007", "high", "Ownership & Access", "pipeline", "ml_feature_refresh",
-     None, "No owner tag; 45% failure rate — ML retraining jobs fail silently when this pipeline breaks",
-     4500.00, "Assign owner tag; add failure alert to oncall rotation", 1),
-    ("FND-000008", "high", "Ownership & Access", "pipeline", "revenue_pipeline_v1",
-     None, "No owner tag on a production pipeline processing $3M+ weekly revenue data",
-     4000.00, "Assign owner from revenue engineering team; document in runbook", 1),
-    ("FND-000009", "high", "ML/AI Governance", "ml_model", "retention_predictor",
-     "bob.kumar@company.com",
-     "Model serves from ml_features_bronze with recent direct writes — feature drift undetected",
-     3800.00, "Retrain on clean silver features; add feature store validation gate", 5),
-    ("FND-000010", "high", "ML/AI Governance", "ml_experiment", "churn_prediction_v2",
-     None, "No owner and no description — experiment cannot be reproduced or audited",
-     3200.00, "Assign owner; add MLflow description with training data ref and evaluation results", 1),
-    ("FND-000011", "high", "ETL Hygiene", "table", "order_items_bronze",
-     "carlos.santos@company.com",
-     "6 direct DML writes in 90 days — feeds gold_product_performance, a KPI source",
-     5000.00, "Remove direct write access; add pipeline expectation on row count", 3),
-    ("FND-000012", "high", "ETL Hygiene", "table", "payment_events_bronze",
-     None, "5 direct DML writes — payment reconciliation data mutated outside pipeline",
-     4500.00, "Revoke write permissions; enforce data contract on schema", 3),
-    ("FND-000013", "high", "Ownership & Access", "pipeline", "marketing_attribution_etl",
-     None, "No owner; pipeline has been running for 14 months with no documented owner",
-     2800.00, "Audit pipeline history; assign owner from marketing analytics team", 1),
-    ("FND-000014", "high", "ML/AI Governance", "ml_model", "fraud_detector_v3",
-     "diana.patel@company.com",
-     "Model not registered in Unity Catalog — no lineage tracking or version control",
-     2500.00, "Register model in UC; link to experiment and training dataset", 2),
-    ("FND-000015", "high", "Ownership & Access", "pipeline", "payment_reconciliation",
-     None, "No owner tag on critical financial reconciliation pipeline",
-     2200.00, "Assign owner from finance engineering team; add to SOX control inventory", 1),
-    ("FND-000016", "high", "ETL Hygiene", "pipeline", "erp_sync_nightly",
-     "erik.johansson@company.com",
-     "Uses hardcoded credential path and S3 bucket — will fail on workspace migration",
-     2000.00, "Migrate credentials to Databricks secrets; use UC external location", 3),
-    ("FND-000017", "high", "Ownership & Access", "pipeline", "fraud_detection_pipeline",
-     None, "No owner; fraud detection system has no designated incident responder",
-     1800.00, "Assign owner from security engineering; add to incident response runbook", 1),
-
-    # Medium findings (23 total)
-    ("FND-000018", "medium", "ETL Hygiene", "table", "inventory_bronze",
-     "fatima.ali@company.com", "4 direct DML writes — inventory staging data mutated ad-hoc",
-     3800.00, "Revoke direct write; add pipeline ownership tag", 2),
-    ("FND-000019", "medium", "ETL Hygiene", "table", "clickstream_raw",
-     "grace.liu@company.com", "4 direct DML writes — clickstream events mutated post-ingestion",
-     3200.00, "Enforce immutable ingest pattern; add APPEND-only constraint", 2),
-    ("FND-000020", "medium", "ETL Hygiene", "table", "sensor_readings_raw",
-     None, "3 direct DML writes on IoT sensor data — breaks time-series continuity",
-     2500.00, "Switch to append-only ingest; fix at-source instead of post-ingest", 2),
-    ("FND-000021", "medium", "Data Quality", "table", "raw_ws_tables",
-     None, "35% of tables have naming violations (not following {layer}_{domain}_{entity} convention)",
-     2000.00, "Run automated rename proposal script; plan migration over Q3", 5),
-    ("FND-000022", "medium", "Data Quality", "table", "silver_tables_batch",
-     None, "38% of silver tables have naming violations — inconsistent domain prefixes",
-     1800.00, "Adopt and enforce naming standard in CI/CD schema linting step", 5),
-    ("FND-000023", "medium", "ML/AI Governance", "ml_experiment", "revenue_forecast_v2",
-     "henry.brown@company.com", "Experiment stale for 45 days — model may be outdated vs current data distribution",
-     1600.00, "Schedule retraining run or archive if no longer in use", 2),
-    ("FND-000024", "medium", "ML/AI Governance", "ml_experiment", "lead_scoring_v1",
-     None, "Experiment has no description — training data, features, and evaluation not documented",
-     1500.00, "Add MLflow run tags: dataset_version, feature_list, evaluation_metric", 1),
-    ("FND-000025", "medium", "ETL Hygiene", "table", "erp_staging_bronze",
-     "irene.garcia@company.com", "3 direct DML writes on ERP staging data",
-     2200.00, "Revoke write access; add data contract validation in ingestion pipeline", 2),
-    ("FND-000026", "medium", "Ownership & Access", "pipeline", "clickstream_processor",
-     None, "No owner tag; high-volume pipeline with no incident responder",
-     1500.00, "Assign owner from web analytics team", 1),
-    ("FND-000027", "medium", "Ownership & Access", "pipeline", "session_aggregator",
-     None, "No owner tag; runs daily but no team tracks failures",
-     1400.00, "Assign owner; add failure notification to team Slack channel", 1),
-    ("FND-000028", "medium", "Data Quality", "pipeline", "data_quality_monitor",
-     "james.wilson@company.com", "8 pipelines lack data quality expectations — no row count or freshness checks",
-     1200.00, "Add minimum row count expectation and max-age freshness check to each pipeline", 3),
-    ("FND-000029", "medium", "ETL Hygiene", "table", "support_tickets_raw",
-     None, "2 direct DML writes on support ticket data — ticket history modified post-close",
-     1800.00, "Enforce immutable event log pattern; investigate who made changes and why", 1),
-    ("FND-000030", "medium", "ETL Hygiene", "table", "ad_spend_bronze",
-     "kate.murphy@company.com", "2 direct DML writes on advertising spend data",
-     1500.00, "Revert ad spend data to last-known-good snapshot; add pipeline constraint", 2),
-    ("FND-000031", "medium", "ML/AI Governance", "ml_model", "product_recommender",
-     "liam.zhang@company.com", "Model not registered in Unity Catalog — no governance trail",
-     1200.00, "Register in UC model registry with experiment link and training data ref", 2),
-    ("FND-000032", "medium", "Ownership & Access", "job", "daily_etl_orchestrator",
-     None, "Job uses classic compute — 3x higher cost vs serverless equivalent",
-     1000.00, "Migrate to serverless compute; estimated 65% cost reduction", 3),
-    ("FND-000033", "medium", "Ownership & Access", "pipeline", "schema_drift_detector",
-     None, "No owner tag; schema drift detection has no responder when alerts fire",
-     900.00, "Assign owner from data platform team; link alert to runbook", 1),
-    ("FND-000034", "medium", "Data Quality", "table", "gold_revenue_summary",
-     "maya.rodriguez@company.com",
-     "Gold table fed by a bronze table with 47 direct writes — downstream quality at risk",
-     800.00, "Add freshness monitor on gold_revenue_summary; alert on anomalous row count delta", 1),
-    ("FND-000035", "medium", "ETL Hygiene", "table", "fulfillment_events_raw",
-     "noah.kim@company.com", "2 direct DML writes on fulfillment events",
-     1200.00, "Add NOT NULL constraint on event_id; enforce append-only pattern", 2),
-    ("FND-000036", "medium", "ETL Hygiene", "table", "user_sessions_bronze",
-     None, "2 direct DML writes on user session data — session replay data affected",
-     1000.00, "Revoke write permissions; sessions are immutable by definition", 1),
-    ("FND-000037", "medium", "ML/AI Governance", "ml_experiment", "customer_segmentation_v1",
-     "olivia.taylor@company.com", "Experiment stale for 38 days",
-     900.00, "Retrain on current customer feature set or archive", 2),
-    ("FND-000038", "medium", "Ownership & Access", "pipeline", "lineage_crawler",
-     None, "No owner tag; lineage metadata is out of date when this fails",
-     800.00, "Assign owner from data governance team", 1),
-    ("FND-000039", "medium", "Data Quality", "table", "pricing_overrides_raw",
-     "alice.chen@company.com", "1 direct DML write on pricing data — override applied outside approval workflow",
-     1000.00, "Implement approval workflow for pricing overrides; add audit log", 3),
-    ("FND-000040", "medium", "Ownership & Access", "pipeline", "cost_allocation_etl",
-     None, "No owner tag on cost allocation pipeline used for chargeback reporting",
-     700.00, "Assign owner from FinOps team; add to monthly chargeback review checklist", 1),
-]
-
-REMEDIATION_FINDINGS = [
-    row[:7] + (decimal.Decimal(str(row[7])),) + row[8:]
-    for row in REMEDIATION_FINDINGS
-]
-
-backlog_df = spark.createDataFrame(
-    REMEDIATION_FINDINGS,
-    StructType([
-        StructField("finding_id", StringType(), False),
-        StructField("severity", StringType(), False),
-        StructField("category", StringType(), False),
-        StructField("asset_type", StringType(), False),
-        StructField("asset_name", StringType(), False),
-        StructField("owner_email", StringType(), True),
-        StructField("description", StringType(), False),
-        StructField("business_impact_usd", DecimalType(10, 2), False),
-        StructField("recommended_action", StringType(), False),
-        StructField("sprint_estimate_days", IntegerType(), False),
-    ])
-)
-# Add detected_at (all findings detected in the past 90 days, critical ones more recent)
-backlog_df = backlog_df.withColumn(
-    "detected_at",
-    F.to_date(F.expr(
-        "CASE severity "
-        "WHEN 'critical' THEN date_sub(current_date(), int(rand(42) * 14)) "
-        "WHEN 'high'     THEN date_sub(current_date(), int(rand(43) * 30)) "
-        "ELSE                 date_sub(current_date(), int(rand(44) * 60)) "
-        "END"
-    ))
-)
-_save(backlog_df, "gold_remediation_backlog")
-
-# ── Constraints (for Catalog Explorer lineage) ────────────────────────────────
-print("\nApplying constraints …")
-for table, col in [
-    ("raw_ws_tables", "table_id"),
-    ("raw_ws_pipelines", "pipeline_id"),
-    ("raw_ws_jobs", "job_id"),
-    ("raw_ws_audit_events", "event_id"),
-    ("raw_ws_ml_experiments", "experiment_id"),
-    ("raw_ws_ml_models", "model_id"),
-    ("gold_bronze_table_edits", "table_name"),
-    ("gold_remediation_backlog", "finding_id"),
-]:
-    try:
-        spark.sql(f"ALTER TABLE {CATALOG}.{SCHEMA}.{table} ALTER COLUMN {col} SET NOT NULL")
-        spark.sql(
-            f"ALTER TABLE {CATALOG}.{SCHEMA}.{table} ADD CONSTRAINT {table}_pk PRIMARY KEY ({col}) NOT ENFORCED RELY"
-        )
-    except Exception as e:
-        print(f"  (constraint skip for {table}.{col}: {e})")
-
-# ── Validation ────────────────────────────────────────────────────────────────
-print("\n── Validation ──────────────────────────────────────────────────────────")
-checks = [
-    (f"SELECT edit_count_90d FROM {CATALOG}.{SCHEMA}.gold_bronze_table_edits WHERE table_name = 'raw_transactions'",
-     "raw_transactions edit_count = 47"),
-    (f"SELECT COUNT(*) AS n FROM {CATALOG}.{SCHEMA}.gold_bronze_table_edits",
-     "gold_bronze_table_edits has 14 rows"),
-    (f"SELECT ROUND(SUM(CAST(estimated_rerun_cost_usd AS DOUBLE)), 0) FROM {CATALOG}.{SCHEMA}.gold_bronze_table_edits",
-     "total rerun cost ≈ $87K"),
-    (f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.gold_remediation_backlog WHERE severity = 'critical'",
-     "6 critical findings"),
-    (f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.gold_remediation_backlog WHERE severity = 'high'",
-     "11 high findings"),
-    (f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.gold_remediation_backlog WHERE severity = 'medium'",
-     "23 medium findings"),
-    (f"SELECT score FROM {CATALOG}.{SCHEMA}.gold_health_scores WHERE dimension = 'overall' AND report_date = current_date()",
-     "overall score = 68"),
-    (f"SELECT score FROM {CATALOG}.{SCHEMA}.gold_health_scores WHERE dimension = 'etl_hygiene' AND report_date = current_date()",
-     "ETL Hygiene score = 55"),
-    (f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.raw_ws_ml_models WHERE is_serving_stale_features = TRUE",
-     "2 models serving stale features"),
-    (f"SELECT COUNT(*) FROM {CATALOG}.{SCHEMA}.raw_ws_pipelines WHERE has_owner_tag = FALSE",
-     "31 pipelines without owner tag"),
-]
-for sql, label in checks:
-    try:
-        result = spark.sql(sql).collect()[0][0]
-        print(f"  ✓ {label}: {result}")
-    except Exception as e:
-        print(f"  ✗ {label}: {e}")
-
-print(f"\n✅ Done. All tables in {CATALOG}.{SCHEMA}")
-print("Next: build the Genie space and dashboard (04-ai-bi.md)")
+print("\n=== Data generation complete ===")
 
 import json as _json  # noqa: E402
 if IN_NOTEBOOK:

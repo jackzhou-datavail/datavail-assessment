@@ -25,21 +25,21 @@
       "name": "ds_critical_backlog",
       "displayName": "Critical Findings",
       "queryLines": [
-        "SELECT severity, category, asset_name, description, business_impact_usd, recommended_action\nFROM gold_remediation_backlog WHERE severity = 'critical' ORDER BY business_impact_usd DESC"
+        "SELECT severity, category, asset_name, description, recommended_action\nFROM gold_remediation_backlog WHERE severity = 'critical' ORDER BY category, asset_name"
       ]
     },
     {
       "name": "ds_bronze_edits",
       "displayName": "Bronze Table Edits",
       "queryLines": [
-        "SELECT table_name, edit_count_90d, severity, downstream_gold_table_count, estimated_rerun_cost_usd\nFROM gold_bronze_table_edits ORDER BY edit_count_90d DESC"
+        "SELECT table_name, edit_count_90d, severity, downstream_gold_table_count\nFROM gold_bronze_table_edits ORDER BY edit_count_90d DESC"
       ]
     },
     {
       "name": "ds_bronze_edits_critical",
       "displayName": "Critical Bronze Table Edits",
       "queryLines": [
-        "SELECT table_name, edit_count_90d, downstream_gold_table_count, estimated_rerun_cost_usd\nFROM gold_bronze_table_edits WHERE severity = 'critical' ORDER BY estimated_rerun_cost_usd DESC"
+        "SELECT table_name, edit_count_90d, downstream_gold_table_count\nFROM gold_bronze_table_edits WHERE severity = 'critical' ORDER BY edit_count_90d DESC"
       ]
     },
     {
@@ -67,7 +67,7 @@
       "name": "ds_backlog",
       "displayName": "Full Remediation Backlog",
       "queryLines": [
-        "SELECT finding_id, severity, category, asset_type, asset_name, owner_email, description,\n  business_impact_usd, recommended_action, sprint_estimate_days\nFROM gold_remediation_backlog\nORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, business_impact_usd DESC"
+        "SELECT finding_id, severity, category, asset_type, asset_name, owner_email, description,\n  recommended_action, detected_at\nFROM gold_remediation_backlog\nORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, category, asset_name"
       ]
     },
     {
@@ -92,7 +92,7 @@
                 "\n",
                 "Overall score, four dimension breakdowns, and the top critical findings driving them.\n",
                 "\n",
-                "Top risk: bronze tables directly edited in the past 90 days, bypassing pipeline expectations. See the ETL deep-dive on page 2."
+                "Top risk: tables written to directly in the past 90 days, bypassing governed jobs and pipelines. See the ETL deep-dive on page 2."
               ]
             }
           },
@@ -341,7 +341,7 @@
                 "showTitle": true,
                 "title": "Health Score by Dimension",
                 "showDescription": true,
-                "description": "ETL Hygiene is the dimension needing the most attention."
+                "description": "Colored by score band: red (below 60), amber (60-74), green (75+)."
               }
             }
           },
@@ -432,10 +432,6 @@
                       "expression": "`description`"
                     },
                     {
-                      "name": "business_impact_usd",
-                      "expression": "`business_impact_usd`"
-                    },
-                    {
                       "name": "recommended_action",
                       "expression": "`recommended_action`"
                     }
@@ -466,18 +462,6 @@
                     "displayName": "Description"
                   },
                   {
-                    "fieldName": "business_impact_usd",
-                    "displayName": "Annual Cost (USD)",
-                    "format": {
-                      "type": "number",
-                      "abbreviation": "compact",
-                      "decimalPlaces": {
-                        "type": "max",
-                        "places": 0
-                      }
-                    }
-                  },
-                  {
                     "fieldName": "recommended_action",
                     "displayName": "Recommended Action"
                   }
@@ -485,7 +469,7 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Top Anti-Patterns by Impact (Critical)",
+                "title": "Critical Findings",
                 "showDescription": true,
                 "description": "The most urgent findings, each row is a Jira ticket waiting to happen."
               }
@@ -511,7 +495,7 @@
               "lines": [
                 "## ETL Hygiene Deep-Dive\n",
                 "\n",
-                "Bronze table DML violations ranked by frequency, pipeline failure rates, and ownership coverage trend."
+                "Direct/ad-hoc table writes ranked by frequency, pipeline failure rates, and current ownership coverage."
               ]
             }
           },
@@ -586,7 +570,7 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Direct DML Writes on Bronze Tables (90 days)",
+                "title": "Direct/Ad-Hoc Table Writes (90 days)",
                 "showDescription": true,
                 "description": "Every bar here represents a pipeline expectation bypass."
               }
@@ -619,10 +603,6 @@
                     {
                       "name": "downstream_gold_table_count",
                       "expression": "`downstream_gold_table_count`"
-                    },
-                    {
-                      "name": "estimated_rerun_cost_usd",
-                      "expression": "`estimated_rerun_cost_usd`"
                     }
                   ],
                   "disaggregated": true
@@ -644,27 +624,15 @@
                   },
                   {
                     "fieldName": "downstream_gold_table_count",
-                    "displayName": "Gold Tables Affected"
-                  },
-                  {
-                    "fieldName": "estimated_rerun_cost_usd",
-                    "displayName": "Annual Cost (USD)",
-                    "format": {
-                      "type": "number",
-                      "abbreviation": "compact",
-                      "decimalPlaces": {
-                        "type": "max",
-                        "places": 0
-                      }
-                    }
+                    "displayName": "Downstream Tables Affected"
                   }
                 ]
               },
               "frame": {
                 "showTitle": true,
-                "title": "Bronze Edit Cost & Downstream Impact",
+                "title": "Direct-Write Frequency & Downstream Impact",
                 "showDescription": true,
-                "description": "The critical bronze tables drive most of the annual rerun cost."
+                "description": "The critical tables have the most downstream dependents relying on data that bypasses governed pipelines."
               }
             }
           },
@@ -855,10 +823,6 @@
                   "datasetName": "ds_ownership_trend_long",
                   "fields": [
                     {
-                      "name": "report_date",
-                      "expression": "`report_date`"
-                    },
-                    {
                       "name": "coverage_pct",
                       "expression": "`coverage_pct`"
                     },
@@ -873,18 +837,18 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "line",
+              "widgetType": "bar",
               "encodings": {
                 "x": {
-                  "fieldName": "report_date",
-                  "scale": {
-                    "type": "temporal"
-                  }
-                },
-                "y": {
                   "fieldName": "coverage_pct",
                   "scale": {
                     "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "series",
+                  "scale": {
+                    "type": "categorical"
                   }
                 },
                 "color": {
@@ -904,11 +868,14 @@
                   }
                 }
               },
+              "mark": {
+                "layout": "group"
+              },
               "frame": {
                 "showTitle": true,
-                "title": "Ownership Coverage - 30-day Trend",
+                "title": "Ownership Coverage - Current vs. Goal",
                 "showDescription": true,
-                "description": "Actual coverage vs. the 95% goal line."
+                "description": "Point-in-time reading from real pipeline ownership. Unity Catalog exposes current state only, so this is not a historical trend."
               }
             }
           },
@@ -932,7 +899,7 @@
               "lines": [
                 "## Remediation Backlog - Sprint Planning View\n",
                 "\n",
-                "Every finding ranked by severity then business impact. Export to CSV and load into Jira."
+                "Every finding ranked by severity. Export to CSV and load into Jira."
               ]
             }
           },
@@ -1103,16 +1070,12 @@
                       "expression": "`description`"
                     },
                     {
-                      "name": "business_impact_usd",
-                      "expression": "`business_impact_usd`"
-                    },
-                    {
                       "name": "recommended_action",
                       "expression": "`recommended_action`"
                     },
                     {
-                      "name": "sprint_estimate_days",
-                      "expression": "`sprint_estimate_days`"
+                      "name": "detected_at",
+                      "expression": "`detected_at`"
                     }
                   ],
                   "disaggregated": true
@@ -1149,24 +1112,12 @@
                     "displayName": "Finding"
                   },
                   {
-                    "fieldName": "business_impact_usd",
-                    "displayName": "Annual Impact (USD)",
-                    "format": {
-                      "type": "number",
-                      "abbreviation": "compact",
-                      "decimalPlaces": {
-                        "type": "max",
-                        "places": 0
-                      }
-                    }
-                  },
-                  {
                     "fieldName": "recommended_action",
                     "displayName": "Recommended Action"
                   },
                   {
-                    "fieldName": "sprint_estimate_days",
-                    "displayName": "Effort (days)"
+                    "fieldName": "detected_at",
+                    "displayName": "Detected"
                   }
                 ]
               },
@@ -1174,7 +1125,7 @@
                 "showTitle": true,
                 "title": "Full Remediation Backlog",
                 "showDescription": true,
-                "description": "Sorted by severity, then annual impact."
+                "description": "Sorted by severity, then category and asset name."
               }
             }
           },
