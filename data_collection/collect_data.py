@@ -58,7 +58,7 @@ if IN_NOTEBOOK:
     SCHEMA = dbutils.widgets.get("schema")
 else:
     CATALOG = os.environ.get("DEMO_CATALOG", "main")
-    SCHEMA = os.environ.get("DEMO_SCHEMA", "assessment_data")
+    SCHEMA = os.environ.get("DEMO_SCHEMA", "assessment_data_v2")
 
 assert CATALOG and SCHEMA, "DEMO_CATALOG and DEMO_SCHEMA must be set"
 
@@ -82,6 +82,7 @@ spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{CATALOG}`.`{SCHEMA}`")
 PROJECT_SCOPES = [
     (CATALOG, SCHEMA),
     ("jz_test", "assessment_data"),
+    ("jz_test", "assessment_data_v2"),
     ("jz_test", "assessment_data_real"),
     ("jz_test", "workspace_health_assessment"),
     ("jz_test", "demo_workspace_health_assessment_report"),

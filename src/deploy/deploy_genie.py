@@ -1,6 +1,6 @@
 # Databricks notebook source
 """
-Deploy the Datavail Assessment Analytics Genie Space.
+Deploy the Datavail Assessment Analytics V2 Genie Space.
 
 Idempotent: searches by title, updates if present, creates if not.
 Loads the committed genie_space.json, substitutes catalog.schema at deploy time.
@@ -18,7 +18,7 @@ Outputs (via dbutils.jobs.taskValues.set):
 
 # COMMAND ----------
 
-SPACE_TITLE = "Datavail Assessment Analytics"
+SPACE_TITLE = "Datavail Assessment Analytics V2"
 SPACE_DESCRIPTION = (
     "Datavail assessment analytics for the engineering team, computed live from this "
     "workspace's real Unity Catalog system tables — no fixed or synthetic numbers. "

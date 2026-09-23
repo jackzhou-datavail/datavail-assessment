@@ -1,18 +1,22 @@
-# Databricks Asset Bundle — Datavail Assessment Demo
+# Databricks Asset Bundle — Datavail Assessment Demo V2 (real-data branch)
 #
-# Provisions: AI/BI Dashboard + setup job (data gen → Genie deploy).
-# No SDP pipeline (data generated via Python SDK).
-# No Databricks App. No Lakebase.
+# Deliberately isolated from the `master` branch's bundle: different bundle
+# name (so it gets its own Terraform state / workspace folder), different
+# resource keys, different schema default, different dashboard/Genie names —
+# deploying this never touches or overwrites master's synthetic-data demo.
+#
+# Provisions: AI/BI Dashboard + setup job (real data extraction → Genie deploy).
+# No SDP pipeline. No Databricks App. No Lakebase.
 #
 # ── 2-command deploy ───────────────────────────────────────────────────────
 #   1. databricks bundle deploy  --var catalog=<your-catalog> \
 #                                --var schema=<your-schema> \
 #                                --var warehouse_id=<your-warehouse-id>
-#   2. databricks bundle run datavail_assessment_setup  --var ...
+#   2. databricks bundle run datavail_assessment_setup_v2  --var ...
 # ──────────────────────────────────────────────────────────────────────────
 
 bundle:
-  name: datavail-assessment
+  name: datavail-assessment-v2
 
 variables:
   catalog:
@@ -20,14 +24,14 @@ variables:
     default: "main"
   schema:
     description: "Schema within the catalog"
-    default: "assessment_data"
+    default: "assessment_data_v2"
   warehouse_id:
     description: "SQL Warehouse ID — powers the dashboard + Genie space (no default: pass --var warehouse_id=<id>)"
 
 sync:
   include:
     - "src/**"
-    - "data_generation/**"
+    - "data_collection/**"
   exclude:
     - "app/**"
     - "**/__pycache__/**"
@@ -45,8 +49,8 @@ resources:
   # dataset_catalog / dataset_schema rebind the embedded queries per-target.
   # ──────────────────────────────────────────────────────────────────────────
   dashboards:
-    datavail_assessment_dashboard:
-      display_name: "[${bundle.target}] Datavail Assessment"
+    datavail_assessment_dashboard_v2:
+      display_name: "[${bundle.target}] Datavail Assessment V2"
       file_path: ./src/dashboard/dashboard.json
       warehouse_id: ${var.warehouse_id}
       dataset_catalog: ${var.catalog}
@@ -54,17 +58,17 @@ resources:
 
   # ──────────────────────────────────────────────────────────────────────────
   # Setup job — runs AFTER `bundle deploy`.
-  #   generate_data   → synthetic workspace metadata into UC tables
-  #   deploy_genie    → creates / updates the Genie space (not declarable)
+  #   collect_data   → extracts real workspace metadata from system tables into UC tables
+  #   deploy_genie   → creates / updates the Genie space (not declarable)
   # ──────────────────────────────────────────────────────────────────────────
   jobs:
-    datavail_assessment_setup:
-      name: "[${bundle.target}] Datavail Assessment Setup"
-      description: "generate synthetic data → deploy Genie space"
+    datavail_assessment_setup_v2:
+      name: "[${bundle.target}] Datavail Assessment Setup V2"
+      description: "collect real workspace data → deploy Genie space"
       tasks:
-        - task_key: generate_data
+        - task_key: collect_data
           notebook_task:
-            notebook_path: ./data_generation/generate_data.py
+            notebook_path: ./data_collection/collect_data.py
             base_parameters:
               catalog:      ${var.catalog}
               schema:       ${var.schema}
@@ -72,7 +76,7 @@ resources:
           environment_key: sdk_default
 
         - task_key: deploy_genie
-          depends_on: [{ task_key: generate_data }]
+          depends_on: [{ task_key: collect_data }]
           notebook_task:
             notebook_path: ./src/deploy/deploy_genie.py
             base_parameters:
@@ -86,7 +90,6 @@ resources:
           spec:
             client: "4"
             dependencies:
-              - "faker"
               - "databricks-sdk>=0.114.0"
         - environment_key: sdk_latest
           spec:
