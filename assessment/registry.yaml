@@ -1,0 +1,124 @@
+# Pattern registry — scoring metadata for the Databricks pattern library.
+#
+# Titles and anti-pattern flags are NOT stored here; they are read from
+# the markdown files at load time so the two can never disagree.
+# `id` matches the markdown filename stem, `cat` the directory name.
+#
+# sev    CRITICAL | HIGH | MEDIUM | LOW      -> weight via severity_weights
+# tier   SYSTEM_TABLE  pure SQL over system.*        (implementable now)
+#        TABLE_DETAIL  needs DESCRIBE DETAIL per table (expensive, per-object)
+#        WORKSPACE_API  Genie / Dashboards / Workspace / Git / grants
+#        ACCOUNT_API    account console or Account API
+#        REPO_SCAN      source control or notebook export scan
+#        MANUAL         design judgment; requires a conversation
+# impl   true when a collector check exists; false emits NOT_AVAILABLE
+# target conformance % at or above which the check grades GOOD
+# floor  conformance % below which the check grades POOR
+# applies ALWAYS | IF_ML | IF_GENAI | IF_STREAMING | IF_SHARING | IF_MULTI_WORKSPACE
+# cause  root-cause grouping key, so overlapping patterns roll up
+
+version: "1.0.0"
+
+severity_weights:
+  CRITICAL: 5.0
+  HIGH: 3.0
+  MEDIUM: 2.0
+  LOW: 1.0
+
+confidence_thresholds:
+  HIGH: 70.0
+  MEDIUM: 40.0
+
+patterns:
+
+  # --- Unity Catalog governance -------------------------------------
+  - {id: unowned-catalog-objects,        cat: unity-catalog-governance, sev: CRITICAL, tier: SYSTEM_TABLE,  impl: true,  target: 95, floor: 70, applies: ALWAYS, cause: ownership}
+  - {id: legacy-hive-metastore-usage,    cat: unity-catalog-governance, sev: CRITICAL, tier: SYSTEM_TABLE,  impl: true,  target: 100, floor: 90, applies: ALWAYS, cause: legacy-platform}
+  - {id: individual-user-grants,         cat: unity-catalog-governance, sev: CRITICAL, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: access-control}
+  - {id: group-based-access-control,     cat: unity-catalog-governance, sev: CRITICAL, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: access-control}
+  - {id: unclassified-sensitive-data,    cat: unity-catalog-governance, sev: HIGH,     tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: data-protection}
+  - {id: automated-pii-classification,   cat: unity-catalog-governance, sev: HIGH,     tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: data-protection}
+  - {id: lineage-and-audit-via-system-tables, cat: unity-catalog-governance, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 100, floor: 70, applies: ALWAYS, cause: observability}
+  - {id: abac-governed-tags,             cat: unity-catalog-governance, sev: MEDIUM,   tier: SYSTEM_TABLE,  impl: false, target: 80, floor: 40, applies: ALWAYS, cause: access-control}
+  - {id: domain-catalog-organization,    cat: unity-catalog-governance, sev: HIGH,     tier: MANUAL,        impl: false, target: 80, floor: 50, applies: ALWAYS, cause: governance-structure}
+
+  # --- Data ingestion -----------------------------------------------
+  - {id: direct-writes-to-bronze-tables, cat: data-ingestion, sev: HIGH,   tier: SYSTEM_TABLE,  impl: true,  target: 95, floor: 75, applies: ALWAYS, cause: layering}
+  - {id: bronze-layer-immutability,      cat: data-ingestion, sev: HIGH,   tier: SYSTEM_TABLE,  impl: true,  target: 95, floor: 75, applies: ALWAYS, cause: layering}
+  - {id: full-reload-instead-of-incremental, cat: data-ingestion, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: incremental-processing}
+  - {id: autoloader-incremental-ingestion, cat: data-ingestion, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: incremental-processing}
+  - {id: idempotent-ingestion-with-checkpoints, cat: data-ingestion, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: IF_STREAMING, cause: incremental-processing}
+  - {id: small-file-accumulation,        cat: data-ingestion, sev: MEDIUM, tier: TABLE_DETAIL,  impl: false, target: 90, floor: 60, applies: ALWAYS, cause: table-maintenance}
+  - {id: missing-schema-enforcement,     cat: data-ingestion, sev: MEDIUM, tier: MANUAL,        impl: false, target: 90, floor: 60, applies: ALWAYS, cause: data-quality}
+  - {id: change-data-capture-ingestion,  cat: data-ingestion, sev: MEDIUM, tier: MANUAL,        impl: false, target: 80, floor: 50, applies: ALWAYS, cause: incremental-processing}
+
+  # --- Table optimization -------------------------------------------
+  - {id: predictive-optimization-autopilot, cat: table-optimization, sev: HIGH,   tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 50, applies: ALWAYS, cause: table-maintenance}
+  - {id: liquid-clustering-over-partitioning, cat: table-optimization, sev: HIGH, tier: TABLE_DETAIL, impl: false, target: 80, floor: 50, applies: ALWAYS, cause: table-layout}
+  - {id: over-partitioning,              cat: table-optimization, sev: HIGH,   tier: TABLE_DETAIL, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: table-layout}
+  - {id: stale-table-statistics,         cat: table-optimization, sev: MEDIUM, tier: TABLE_DETAIL, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: table-maintenance}
+  - {id: unmanaged-vacuum-retention,     cat: table-optimization, sev: MEDIUM, tier: TABLE_DETAIL, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: table-maintenance}
+  - {id: deletion-vectors-for-fast-dml,  cat: table-optimization, sev: MEDIUM, tier: TABLE_DETAIL, impl: false, target: 80, floor: 40, applies: ALWAYS, cause: table-layout}
+
+  # --- Platform onboarding ------------------------------------------
+  - {id: personal-identity-in-production, cat: platform-onboarding, sev: CRITICAL, tier: SYSTEM_TABLE, impl: true,  target: 95, floor: 70, applies: ALWAYS, cause: non-human-identity}
+  - {id: service-principals-for-automation, cat: platform-onboarding, sev: CRITICAL, tier: SYSTEM_TABLE, impl: true, target: 95, floor: 70, applies: ALWAYS, cause: non-human-identity}
+  - {id: account-first-identity-federation, cat: platform-onboarding, sev: CRITICAL, tier: ACCOUNT_API, impl: false, target: 100, floor: 80, applies: ALWAYS, cause: identity}
+  - {id: compute-policies-and-standard-sizing, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: compute-governance}
+  - {id: serverless-first-compute,       cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 70, floor: 30, applies: ALWAYS, cause: compute-efficiency}
+  - {id: all-purpose-compute-for-jobs,   cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 95, floor: 75, applies: ALWAYS, cause: compute-efficiency}
+  - {id: cost-attribution-tagging-and-budgets, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 50, applies: ALWAYS, cause: cost-attribution}
+  - {id: untagged-unmonitored-spend,     cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 50, applies: ALWAYS, cause: cost-attribution}
+  - {id: observability-from-system-tables, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 100, floor: 70, applies: ALWAYS, cause: observability}
+  - {id: infrastructure-as-code-terraform-and-bundles, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 50, applies: ALWAYS, cause: iac}
+  - {id: manually-configured-workspaces, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 50, applies: ALWAYS, cause: iac}
+  - {id: git-backed-development-and-cicd, cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: version-control}
+  - {id: notebooks-as-production-code,   cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: version-control}
+  - {id: environment-based-workspace-strategy, cat: platform-onboarding, sev: HIGH, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: workspace-topology}
+  - {id: workspace-sprawl,               cat: platform-onboarding, sev: MEDIUM, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: IF_MULTI_WORKSPACE, cause: workspace-topology}
+  - {id: phased-deployment-planning,     cat: platform-onboarding, sev: MEDIUM, tier: MANUAL,      impl: false, target: 80, floor: 40, applies: ALWAYS, cause: governance-structure}
+
+  # --- ML & AI lifecycle --------------------------------------------
+  - {id: stale-models-in-production,     cat: ml-ai-lifecycle, sev: CRITICAL, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 60, applies: IF_ML, cause: ml-monitoring}
+  - {id: models-in-unity-catalog,        cat: ml-ai-lifecycle, sev: CRITICAL, tier: SYSTEM_TABLE, impl: true,  target: 95, floor: 70, applies: IF_ML, cause: model-governance}
+  - {id: ungoverned-external-llm-access, cat: ml-ai-lifecycle, sev: CRITICAL, tier: SYSTEM_TABLE, impl: true,  target: 95, floor: 70, applies: IF_GENAI, cause: llm-governance}
+  - {id: untracked-model-development,    cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 60, applies: IF_ML, cause: ml-reproducibility}
+  - {id: mlflow-experiment-tracking,     cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 60, applies: IF_ML, cause: ml-reproducibility}
+  - {id: inference-tables-and-drift-monitoring, cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 50, applies: IF_ML, cause: ml-monitoring}
+  - {id: legacy-workspace-model-registry, cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 95, floor: 70, applies: IF_ML, cause: legacy-platform}
+  - {id: gateway-governance-for-llm-endpoints, cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: IF_GENAI, cause: llm-governance}
+  - {id: production-serving-endpoint-configuration, cat: ml-ai-lifecycle, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: IF_ML, cause: ml-serving-ops}
+  - {id: deploy-code-not-models,         cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE,  impl: false, target: 90, floor: 60, applies: IF_ML, cause: ml-reproducibility}
+  - {id: model-aliases-for-deployment-state, cat: ml-ai-lifecycle, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 90, floor: 60, applies: IF_ML, cause: model-governance}
+  - {id: cicd-for-ml-pipelines,          cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE,  impl: false, target: 90, floor: 60, applies: IF_ML, cause: version-control}
+  - {id: genai-evaluation-and-human-feedback, cat: ml-ai-lifecycle, sev: HIGH, tier: SYSTEM_TABLE, impl: false, target: 80, floor: 40, applies: IF_GENAI, cause: llm-quality}
+  - {id: feature-store-for-consistent-features, cat: ml-ai-lifecycle, sev: HIGH, tier: MANUAL, impl: false, target: 80, floor: 40, applies: IF_ML, cause: feature-consistency}
+  - {id: training-serving-skew,          cat: ml-ai-lifecycle, sev: HIGH, tier: MANUAL,        impl: false, target: 90, floor: 60, applies: IF_ML, cause: feature-consistency}
+
+  # --- Orchestration & reliability ----------------------------------
+  - {id: silent-job-failures,            cat: orchestration-reliability, sev: CRITICAL, tier: SYSTEM_TABLE,  impl: true,  target: 95, floor: 80, applies: ALWAYS, cause: job-reliability}
+  - {id: task-dependencies-over-schedule-chaining, cat: orchestration-reliability, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: job-structure}
+  - {id: schedule-chained-jobs,          cat: orchestration-reliability, sev: HIGH, tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: job-structure}
+  - {id: monolithic-single-task-jobs,    cat: orchestration-reliability, sev: HIGH, tier: SYSTEM_TABLE,  impl: true,  target: 80, floor: 50, applies: ALWAYS, cause: job-structure}
+  - {id: retries-and-timeouts-on-every-task, cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
+  - {id: unbounded-task-execution,       cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
+  - {id: failure-notifications-and-duration-thresholds, cat: orchestration-reliability, sev: CRITICAL, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: job-reliability}
+  - {id: pipeline-expectations-for-data-quality, cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 80, floor: 40, applies: IF_STREAMING, cause: data-quality}
+  - {id: separate-ingestion-and-transformation-pipelines, cat: orchestration-reliability, sev: MEDIUM, tier: SYSTEM_TABLE, impl: false, target: 85, floor: 50, applies: IF_STREAMING, cause: job-structure}
+
+  # --- SQL & analytics ----------------------------------------------
+  - {id: analytics-on-raw-tables,        cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: layering}
+  - {id: medallion-layering-for-analytics, cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: layering}
+  - {id: documented-tables-and-columns,  cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 80, floor: 40, applies: ALWAYS, cause: metadata-quality}
+  - {id: always-on-oversized-warehouses, cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: compute-efficiency}
+  - {id: serverless-sql-warehouses,      cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 80, floor: 40, applies: ALWAYS, cause: compute-efficiency}
+  - {id: metric-views-as-semantic-layer, cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true,  target: 70, floor: 20, applies: ALWAYS, cause: semantic-layer}
+  - {id: federated-queries-in-production-pipelines, cat: sql-analytics, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 95, floor: 75, applies: ALWAYS, cause: federation-misuse}
+  - {id: federation-for-ad-hoc-access,   cat: sql-analytics, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: federation-misuse}
+  - {id: scheduled-snapshot-rebuilds,    cat: sql-analytics, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: incremental-processing}
+  - {id: query-performance-fundamentals, cat: sql-analytics, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: query-performance}
+  - {id: materialized-views-for-serving-layers, cat: sql-analytics, sev: MEDIUM, tier: SYSTEM_TABLE, impl: false, target: 70, floor: 30, applies: ALWAYS, cause: incremental-processing}
+  - {id: duplicated-metric-definitions,  cat: sql-analytics, sev: MEDIUM, tier: SYSTEM_TABLE, impl: false, target: 80, floor: 40, applies: ALWAYS, cause: semantic-layer}
+  - {id: dashboards-on-governed-datasets, cat: sql-analytics, sev: MEDIUM, tier: WORKSPACE_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: layering}
+  - {id: curated-genie-spaces,           cat: sql-analytics, sev: MEDIUM, tier: WORKSPACE_API, impl: false, target: 80, floor: 40, applies: IF_GENAI, cause: genie-quality}
+  - {id: sprawling-genie-spaces,         cat: sql-analytics, sev: MEDIUM, tier: WORKSPACE_API, impl: false, target: 90, floor: 60, applies: IF_GENAI, cause: genie-quality}
