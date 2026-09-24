@@ -1,0 +1,131 @@
+# Databricks Asset Bundle — Platform Onboarding Assessment
+#
+# Deliberately a SEPARATE bundle from the repo-root databricks.yml: its own
+# bundle name (so its own Terraform state and workspace folder), its own
+# resource keys, its own schedule. Deploying this never touches the
+# resources the root bundle owns, and vice versa.
+#
+# Provisions ONE job that runs the assessment collector and writes to the
+# results catalog. The dashboard is not declared here — it reads whatever
+# the latest COMPLETE run wrote, so it needs no redeploy when data refreshes.
+#
+# This job is an ADDITIONAL entry point, not a replacement. Running the
+# collector locally stays fully supported and is unaffected by deploying
+# or destroying this bundle:
+#
+#   python run_via_sql_warehouse.py --profile <p> --warehouse-id <id>
+#
+# The local path needs no cluster and no pyspark; this job runs the same
+# checks on serverless compute. Both append a new run_id to the same
+# tables, and the dashboard reads whichever ran most recently.
+#
+# ── Deploy ─────────────────────────────────────────────────────────────────
+#   cd assessment
+#   databricks bundle deploy -p <profile> --var warehouse_id=<id>
+#   databricks bundle run platform_assessment_collect -p <profile> --var warehouse_id=<id>
+#
+# The schedule below is PAUSED on purpose. Deploying will not start
+# collecting on its own — unpause it once you have seen a manual run pass.
+# ───────────────────────────────────────────────────────────────────────────
+
+bundle:
+  name: platform-assessment
+
+variables:
+  results_catalog:
+    description: "Dedicated catalog for assessment output. Always excluded from assessment scope."
+    default: "assessment"
+  results_schema:
+    description: "Schema within the results catalog"
+    default: "results"
+  lookback_days:
+    description: "Observation window in days for activity-based checks"
+    default: "30"
+  warehouse_id:
+    description: "SQL Warehouse ID — only used if you attach the dashboard; the job itself uses serverless compute"
+    default: ""
+  alert_email:
+    description: "Where job failures are sent. Use a group alias, not a person."
+    default: ""
+
+# The collector reads pattern titles from the markdown, so patterns/ must be
+# synced alongside the code. Without it the job still runs, but the dashboard's
+# Pattern column falls back to showing raw ids.
+sync:
+  paths:
+    - .
+    - ../patterns
+
+targets:
+  dev:
+    default: true
+    mode: development
+  prod:
+    mode: production
+    # Production runs should use a service principal, not a named person —
+    # see patterns/platform-onboarding/service-principals-for-automation.md
+    # run_as:
+    #   service_principal_name: "<application-id>"
+
+resources:
+  jobs:
+    platform_assessment_collect:
+      name: "[${bundle.target}] Platform Onboarding Assessment — Collect"
+      description: >-
+        Runs the pattern-library checks against this workspace's system tables
+        and writes conformance results to ${var.results_catalog}.${var.results_schema}.
+
+      tasks:
+        # Registry and patterns paths are passed explicitly. spark_python_task
+        # on serverless exec()s the file without defining __file__, so the
+        # script cannot reliably derive its own location; these workspace
+        # paths are deterministic. Running locally needs neither flag.
+        - task_key: collect
+          spark_python_task:
+            python_file: ./run_assessment.py
+            parameters:
+              - "--results-catalog"
+              - "${var.results_catalog}"
+              - "--results-schema"
+              - "${var.results_schema}"
+              - "--lookback-days"
+              - "${var.lookback_days}"
+              - "--registry"
+              - "${workspace.file_path}/assessment/registry.yaml"
+              - "--patterns-dir"
+              - "${workspace.file_path}/patterns"
+          environment_key: collector
+          # Transient system-table read failures are worth retrying; a wrong
+          # query is not, so keep this low. See
+          # patterns/orchestration-reliability/retries-and-timeouts-on-every-task.md
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          timeout_seconds: 3600
+
+      environments:
+        - environment_key: collector
+          spec:
+            client: "4"
+            # lib.py falls back to its own parser when PyYAML is absent, so
+            # there are no hard dependencies. PyYAML is listed only because it
+            # gives better error messages on a malformed registry.
+            dependencies:
+              - "pyyaml>=6.0"
+
+      # Weekly. Assessment drift is a slow signal; daily adds cost without
+      # adding information.
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON"
+        timezone_id: "UTC"
+        pause_status: PAUSED
+
+      email_notifications:
+        on_failure:
+          - "${var.alert_email}"
+
+      # A run that overlaps itself would write two rows for the same period.
+      max_concurrent_runs: 1
+
+      tags:
+        purpose: platform-assessment
+        owner: datavail
