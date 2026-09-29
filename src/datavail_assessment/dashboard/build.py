@@ -19,13 +19,13 @@ import argparse
 import json
 import os
 
-from .pages import adoption
+from .pages import adoption, conformance
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "datavail_assessment.lvdash.json")
 
 # Page order is display order. Each module supplies datasets() and layout().
-PAGES = [adoption]
+PAGES = [adoption, conformance]
 
 
 def build(catalog: str, schema: str) -> dict:
