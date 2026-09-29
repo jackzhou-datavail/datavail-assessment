@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 def split_sql(ddl: str) -> list[str]:
     """Split a DDL script on statement boundaries, quote-aware.
@@ -47,6 +48,11 @@ def lit(v) -> str:
     """Render a Python value as a SQL literal for INSERT ... VALUES."""
     if v is None:
         return "NULL"
+    if isinstance(v, datetime):
+        # Explicit TIMESTAMP literal rather than relying on an implicit
+        # cast from a quoted string, which is parser-dependent once a
+        # timezone offset is involved.
+        return "TIMESTAMP '" + v.strftime("%Y-%m-%d %H:%M:%S.%f") + "'"
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     if isinstance(v, (int, float)):
