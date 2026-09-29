@@ -71,6 +71,12 @@ produce models with no corresponding UC registration are the other
 half. Stage transitions, where they still happen, appear in
 `system.access.audit` as workspace model registry events.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Use of MLFlow experiments, model registry in UC** — *supporting;* primary pattern is [`models-in-unity-catalog.md`](models-in-unity-catalog.md).
+
 ## References
 
 - [Manage model lifecycle in Unity Catalog](https://docs.databricks.com/aws/en/machine-learning/manage-model-lifecycle/)

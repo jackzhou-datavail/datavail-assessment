@@ -46,6 +46,14 @@ The practical anti-pattern signal, once that's wired up, is columns with
 names strongly suggesting sensitive content (`ssn`, `email`, `dob`, etc.)
 that carry no classification tag at all.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Governance and Unity Catalog › ABAC policies used** — *primary.* Are ABAC row-filter / column-mask policies attached at catalog or schema level using governed tags, so new tables are protected automatically?
+- **Governance and Unity Catalog › Use of tagging** — *supporting;* primary pattern is [`tagging-strategy.md`](tagging-strategy.md).
+- **Governance and Unity Catalog › Access controls (row filters, column masks)** — *supporting;* primary pattern is [`row-filters-and-column-masks.md`](row-filters-and-column-masks.md).
+
 ## References
 
 - [Core concepts for attribute-based access control (ABAC)](https://docs.databricks.com/aws/en/data-governance/unity-catalog/abac/core-concepts)

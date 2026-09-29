@@ -30,6 +30,10 @@ fabricates nothing.
 
 - System tables enabled across **all** metastores, not just the one
   someone was investigating an incident in.
+- **Cost monitoring dashboards** in place — the account cost-management
+  AI/BI dashboards imported into a UC-enabled workspace, or custom
+  dashboards on `system.billing.usage` — reviewed on a schedule; see
+  [`spend-trend-monitoring.md`](spend-trend-monitoring.md).
 - Job and pipeline failures raise something: "email notifications or
   webhooks for critical job failures," with SLA tracking queried from
   `system.lakeflow.job_run_timeline` rather than watched by hand.
@@ -59,6 +63,13 @@ coverage: the share of production jobs in `system.lakeflow.jobs` with
 no configured failure notification, and the share of gold-layer tables
 with no entry in `system.data_quality_monitoring`. Alert definitions
 and their evaluation history live in `system.alert`.
+
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Platform management › Observability tools in place?** — *primary.* Are system tables enabled, and are there dashboards and alerts on them for cost, job reliability, query performance and data quality?
+- **Security and Identity › Audit logging** — *supporting;* primary pattern is [`security-audit-monitoring.md`](../security-compliance/security-audit-monitoring.md).
 
 ## References
 

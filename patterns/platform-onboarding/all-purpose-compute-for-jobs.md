@@ -70,6 +70,12 @@ find the always-on cluster that is mostly idle.
 history but not `system.billing.*` or `system.compute.*`, so the cost
 half of this check isn't wired up in this repo yet.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **FinOps › Compute configuration (Classic)** — *supporting;* primary pattern is [`misconfigured-classic-compute.md`](misconfigured-classic-compute.md).
+
 ## References
 
 - [Best practices for cost optimization](https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices)

@@ -45,6 +45,13 @@ that also show a high proportion of tables with `has_owner_tag = FALSE` —
 low ownership accountability and missing classification tend to go
 together.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Compliance/regulatory alignment › PII handling** — *primary.* Is PII detected and tagged automatically, protected by masks / filters, and removable on request?
+- **Compliance/regulatory alignment › Requirements for regulatory framework(s)?** — *supporting;* primary pattern is [`compliance-security-profile.md`](../security-compliance/compliance-security-profile.md).
+
 ## References
 
 - [Data Classification](https://learn.microsoft.com/en-us/azure/databricks/data-governance/unity-catalog/data-classification)

@@ -57,6 +57,12 @@ cross-referenced against `information_schema.column_tags` for a
 `class.*` or equivalent classification tag — any match with no tag is a
 finding.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Compliance/regulatory alignment › PII handling** — *supporting;* primary pattern is [`automated-pii-classification.md`](automated-pii-classification.md).
+
 ## References
 
 - [Data Classification](https://learn.microsoft.com/en-us/azure/databricks/data-governance/unity-catalog/data-classification)

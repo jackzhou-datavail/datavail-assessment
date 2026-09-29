@@ -56,6 +56,12 @@ scans across objects, since system tables don't currently expose the
 grant graph the way they expose ownership — `data_collection/collect_data.py`
 covers the ownership signal today but not a full grants audit.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Governance and Unity Catalog › Identity/group management on resources** — *supporting;* primary pattern is [`workspace-object-permissions.md`](../platform-onboarding/workspace-object-permissions.md).
+
 ## References
 
 - [Unity Catalog best practices](https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices)

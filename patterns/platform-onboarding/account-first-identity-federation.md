@@ -65,6 +65,13 @@ identities. `data_collection/collect_data.py` already reads those fields
 for its `has_owner_tag` signal, though it treats any non-null owner as
 positive and does not distinguish a person from a group.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Security and Identity › SSO and identity management** — *primary.* Is SSO with MFA enforced at account level, are users and groups provisioned by SCIM / automatic identity management, and is the admin count small? Run SAT for the configuration checks.
+- **Governance and Unity Catalog › Identity/group management on resources** — *supporting;* primary pattern is [`workspace-object-permissions.md`](workspace-object-permissions.md).
+
 ## References
 
 - [Phase 1: Design account and identity strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/account-setup)

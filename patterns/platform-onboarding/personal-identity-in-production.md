@@ -75,6 +75,13 @@ Hardcoded credentials are not visible in system tables at all — that
 check is a secret-scanning pass over the repo and over notebook
 sources exported via the Workspace API.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Security and Identity › SSO and identity management** — *supporting;* primary pattern is [`account-first-identity-federation.md`](account-first-identity-federation.md).
+- **Security and Identity › Secrets** — *supporting;* primary pattern is [`secrets-management.md`](../security-compliance/secrets-management.md).
+
 ## References
 
 - [Identity best practices](https://docs.databricks.com/aws/en/admin/users-groups/best-practices)

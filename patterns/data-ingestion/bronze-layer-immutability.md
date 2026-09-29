@@ -46,6 +46,12 @@ query. A table with a nonzero count there is a live instance of this
 anti-pattern — see
 [`direct-writes-to-bronze-tables.md`](direct-writes-to-bronze-tables.md).
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › Layering (medallion) pattern used** — *supporting;* primary pattern is [`medallion-layering-for-analytics.md`](../sql-analytics/medallion-layering-for-analytics.md).
+
 ## References
 
 - [What is the medallion lakehouse architecture?](https://docs.databricks.com/aws/en/lakehouse/medallion)

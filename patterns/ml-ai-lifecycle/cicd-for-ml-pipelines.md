@@ -57,6 +57,12 @@ bundle deployment applies. In `system.mlflow.runs_latest`, runs whose
 `tags` carry no git commit or source-version tag indicate training that
 did not come from a versioned pipeline.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **CI/CD / Development Lifecycle › Use of DABs** — *supporting;* primary pattern is [`infrastructure-as-code-terraform-and-bundles.md`](../platform-onboarding/infrastructure-as-code-terraform-and-bundles.md).
+
 ## References
 
 - [How does Databricks support CI/CD for machine learning?](https://docs.databricks.com/aws/en/machine-learning/mlops/ci-cd-for-ml)

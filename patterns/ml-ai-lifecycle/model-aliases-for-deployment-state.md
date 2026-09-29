@@ -56,6 +56,12 @@ alias is the concrete instance of this gap. Alias changes appear in
 `system.access.audit` as model-version events, which also tells you
 whether promotions are being made by a pipeline principal or by hand.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Use of MLFlow experiments, model registry in UC** — *supporting;* primary pattern is [`models-in-unity-catalog.md`](models-in-unity-catalog.md).
+
 ## References
 
 - [Manage model lifecycle in Unity Catalog](https://docs.databricks.com/aws/en/machine-learning/manage-model-lifecycle/)

@@ -56,6 +56,13 @@ policy doesn't actually constrain anything. `system.billing.usage`
 joined to cluster ids ranks the ungoverned clusters by what they cost,
 which is usually the version of this finding that gets acted on.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Governance and Unity Catalog › Policies for compute** — *primary.* Is every cluster created under a compute policy that enforces auto-termination, autoscaling bounds, instance types and tags? Check `policy_id` in `system.compute.clusters`.
+- **FinOps › Compute configuration (Classic)** — *supporting;* primary pattern is [`misconfigured-classic-compute.md`](misconfigured-classic-compute.md).
+
 ## References
 
 - [Create and manage compute policies](https://docs.databricks.com/aws/en/admin/clusters/policies)

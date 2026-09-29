@@ -71,6 +71,12 @@ lacking the `[<target>] <name>` prefix that bundle deployment applies.
 `data_collection/collect_data.py` already loads those tables with
 creator and `run_as` fields.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › How workspaces are split for environments** — *supporting;* primary pattern is [`environment-based-workspace-strategy.md`](environment-based-workspace-strategy.md).
+
 ## References
 
 - [Phase 7: Design IaC strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/iac)

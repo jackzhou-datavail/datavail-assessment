@@ -59,6 +59,12 @@ datasets, publish state, and credential mode, which is where the
 sharing findings come from; `system.access.audit` records publish and
 permission changes.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/BI › Metric centralization** — *supporting;* primary pattern is [`metric-views-as-semantic-layer.md`](metric-views-as-semantic-layer.md).
+
 ## References
 
 - [AI/BI Dashboards](https://docs.databricks.com/aws/en/dashboards/)

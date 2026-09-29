@@ -77,6 +77,12 @@ checks are outside system tables: scan repos and exported notebook
 sources for provider SDK imports and API-key-shaped strings, and look
 for direct provider charges on accounts outside the Databricks bill.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Gen AI readiness** — *supporting;* primary pattern is [`genai-readiness-foundations.md`](genai-readiness-foundations.md).
+
 ## References
 
 - [Unity Gateway](https://docs.databricks.com/aws/en/ai-gateway/)

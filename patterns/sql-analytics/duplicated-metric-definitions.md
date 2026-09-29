@@ -73,6 +73,12 @@ distinct consumers read the same fact table directly rather than
 through a metric view. The absence of metric views in the reporting
 schemas of `system.information_schema` is the structural precondition.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/BI › Metric centralization** — *supporting;* primary pattern is [`metric-views-as-semantic-layer.md`](metric-views-as-semantic-layer.md).
+
 ## References
 
 - [Unity Catalog metric views](https://docs.databricks.com/aws/en/uc-semantics/metric-views/)

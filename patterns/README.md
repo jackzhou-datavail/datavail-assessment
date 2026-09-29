@@ -16,6 +16,14 @@ Content is verified against current Databricks documentation (linked in
 each file's References section) as of 2026-09, not written from memory
 alone — see individual files for exact source quotes.
 
+## Assessment checklist mapping
+
+Every item in the assessment checklist (`init_items` sheet of
+`Copy of databricks-assessment.xlsx`) maps to one primary pattern file
+and, where useful, supporting files — see [ASSESSMENT-MAP.md](ASSESSMENT-MAP.md).
+Each mapped pattern file also lists the items it answers in its
+**Assessment items addressed** section.
+
 ## Categories
 
 - **[Platform Onboarding](platform-onboarding/)** — standing up and running
@@ -30,12 +38,18 @@ alone — see individual files for exact source quotes.
   - [Service principals for automation](platform-onboarding/service-principals-for-automation.md)
   - [Cost attribution tagging and budgets](platform-onboarding/cost-attribution-tagging-and-budgets.md)
   - [Observability from system tables](platform-onboarding/observability-from-system-tables.md)
+  - [Group-based permissions on workspace resources](platform-onboarding/workspace-object-permissions.md)
+  - [Platform usage profile from billing data](platform-onboarding/platform-usage-profile.md)
+  - [Compute right-sizing from utilization data](platform-onboarding/compute-right-sizing.md)
+  - [Spend trend monitoring](platform-onboarding/spend-trend-monitoring.md)
+  - [Disaster recovery strategy with tested RPO/RTO](platform-onboarding/disaster-recovery-strategy.md)
   - [Workspace sprawl](platform-onboarding/workspace-sprawl.md) — ⚠️ anti-pattern
   - [Manually configured "snowflake" workspaces](platform-onboarding/manually-configured-workspaces.md) — ⚠️ anti-pattern
   - [All-purpose compute for scheduled jobs](platform-onboarding/all-purpose-compute-for-jobs.md) — ⚠️ anti-pattern
   - [Notebooks as production code](platform-onboarding/notebooks-as-production-code.md) — ⚠️ anti-pattern
   - [Personal identities & hardcoded credentials in production](platform-onboarding/personal-identity-in-production.md) — ⚠️ anti-pattern
   - [Untagged, unmonitored spend](platform-onboarding/untagged-unmonitored-spend.md) — ⚠️ anti-pattern
+  - [Misconfigured classic compute](platform-onboarding/misconfigured-classic-compute.md) — ⚠️ anti-pattern
 
 - **[Orchestration & Reliability](orchestration-reliability/)** — how work is
   scheduled, how it fails, and how it recovers
@@ -44,6 +58,7 @@ alone — see individual files for exact source quotes.
   - [Failure notifications and duration thresholds](orchestration-reliability/failure-notifications-and-duration-thresholds.md)
   - [Separate ingestion and transformation pipelines](orchestration-reliability/separate-ingestion-and-transformation-pipelines.md)
   - [Pipeline expectations for data quality](orchestration-reliability/pipeline-expectations-for-data-quality.md)
+  - [SLA tracking and data freshness](orchestration-reliability/sla-tracking-and-data-freshness.md)
   - [Schedule-chained jobs](orchestration-reliability/schedule-chained-jobs.md) — ⚠️ anti-pattern
   - [Silent job failures](orchestration-reliability/silent-job-failures.md) — ⚠️ anti-pattern
   - [Monolithic single-task jobs](orchestration-reliability/monolithic-single-task-jobs.md) — ⚠️ anti-pattern
@@ -60,6 +75,8 @@ alone — see individual files for exact source quotes.
   - [Dashboards on governed datasets](sql-analytics/dashboards-on-governed-datasets.md)
   - [Query performance fundamentals](sql-analytics/query-performance-fundamentals.md)
   - [Lakehouse Federation for ad-hoc access](sql-analytics/federation-for-ad-hoc-access.md)
+  - [Cost per query attribution](sql-analytics/cost-per-query-attribution.md)
+  - [Third-party BI tools on governed semantics](sql-analytics/third-party-bi-tool-integration.md)
   - [Always-on, oversized warehouses](sql-analytics/always-on-oversized-warehouses.md) — ⚠️ anti-pattern
   - [Duplicated metric definitions](sql-analytics/duplicated-metric-definitions.md) — ⚠️ anti-pattern
   - [Analytics on raw tables](sql-analytics/analytics-on-raw-tables.md) — ⚠️ anti-pattern
@@ -79,6 +96,7 @@ alone — see individual files for exact source quotes.
   - [Production serving endpoint configuration](ml-ai-lifecycle/production-serving-endpoint-configuration.md)
   - [Gateway governance for LLM endpoints](ml-ai-lifecycle/gateway-governance-for-llm-endpoints.md)
   - [GenAI evaluation and human feedback](ml-ai-lifecycle/genai-evaluation-and-human-feedback.md)
+  - [GenAI readiness foundations](ml-ai-lifecycle/genai-readiness-foundations.md)
   - [Legacy workspace model registry and stages](ml-ai-lifecycle/legacy-workspace-model-registry.md) — ⚠️ anti-pattern
   - [Untracked model development](ml-ai-lifecycle/untracked-model-development.md) — ⚠️ anti-pattern
   - [Training-serving skew](ml-ai-lifecycle/training-serving-skew.md) — ⚠️ anti-pattern
@@ -101,6 +119,9 @@ alone — see individual files for exact source quotes.
   - [ABAC with governed tags](unity-catalog-governance/abac-governed-tags.md)
   - [Automated sensitive-data classification](unity-catalog-governance/automated-pii-classification.md)
   - [Lineage & audit logging via system tables](unity-catalog-governance/lineage-and-audit-via-system-tables.md)
+  - [Fine-grained access with row filters and column masks](unity-catalog-governance/row-filters-and-column-masks.md)
+  - [Explicit data retention policies](unity-catalog-governance/data-retention-policies.md)
+  - [A single tagging strategy across data and compute](unity-catalog-governance/tagging-strategy.md)
   - [Direct grants to individual users](unity-catalog-governance/individual-user-grants.md) — ⚠️ anti-pattern
   - [Continued use of the legacy Hive metastore](unity-catalog-governance/legacy-hive-metastore-usage.md) — ⚠️ anti-pattern
   - [Unowned / never-reassigned catalog objects](unity-catalog-governance/unowned-catalog-objects.md) — ⚠️ anti-pattern
@@ -113,6 +134,19 @@ alone — see individual files for exact source quotes.
   - [Over-partitioning](table-optimization/over-partitioning.md) — ⚠️ anti-pattern
   - [Unmanaged VACUUM retention](table-optimization/unmanaged-vacuum-retention.md) — ⚠️ anti-pattern
   - [Stale or missing table statistics](table-optimization/stale-table-statistics.md) — ⚠️ anti-pattern
+
+- **[Security & Compliance](security-compliance/)** — secrets, encryption,
+  security monitoring, posture baselines, and regulated-workload controls
+  - [Secrets managed in secret scopes or Unity Catalog](security-compliance/secrets-management.md)
+  - [Customer-managed keys for encryption](security-compliance/customer-managed-keys.md)
+  - [Security audit log monitoring and alerting](security-compliance/security-audit-monitoring.md)
+  - [Security posture baseline with the Security Analysis Tool](security-compliance/security-analysis-tool-baseline.md)
+  - [Compliance security profile for regulated workloads](security-compliance/compliance-security-profile.md)
+
+- **[Data Sharing & Collaboration](data-sharing/)** — sharing data with other
+  teams, metastores, partners, and customers
+  - [Governed data sharing with Delta Sharing / OpenSharing](data-sharing/governed-data-sharing.md)
+  - [Data copies instead of sharing](data-sharing/data-copies-instead-of-sharing.md) — ⚠️ anti-pattern
 
 ## File template
 

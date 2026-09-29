@@ -78,6 +78,12 @@ for skew. Where inference tables exist, comparing logged input
 distributions against the training baseline via a data profiling
 monitor surfaces the divergence quantitatively.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Feature management** — *supporting;* primary pattern is [`feature-store-for-consistent-features.md`](feature-store-for-consistent-features.md).
+
 ## References
 
 - [Databricks Feature Store](https://docs.databricks.com/aws/en/machine-learning/feature-store/)

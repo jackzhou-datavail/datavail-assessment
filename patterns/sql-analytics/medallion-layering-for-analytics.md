@@ -59,6 +59,12 @@ tables in that list are the finding. `system.information_schema.tables`
 reveals whether the layering exists structurally at all (distinct
 bronze/silver/gold schemas) or is only implied by table name prefixes.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › Layering (medallion) pattern used** — *primary.* Do bronze / silver / gold layers exist as separate schemas or catalogs, and do consumers read gold rather than raw tables?
+
 ## References
 
 - [What is the medallion lakehouse architecture?](https://docs.databricks.com/aws/en/lakehouse/medallion)

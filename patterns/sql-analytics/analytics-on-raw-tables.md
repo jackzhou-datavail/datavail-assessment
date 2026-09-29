@@ -71,6 +71,12 @@ Cross-check `system.information_schema.columns.comment` on those
 tables — heavy analytical reads against undocumented raw tables is the
 combination that most degrades both accuracy and trust.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › Layering (medallion) pattern used** — *supporting;* primary pattern is [`medallion-layering-for-analytics.md`](medallion-layering-for-analytics.md).
+
 ## References
 
 - [What is the medallion lakehouse architecture?](https://docs.databricks.com/aws/en/lakehouse/medallion)

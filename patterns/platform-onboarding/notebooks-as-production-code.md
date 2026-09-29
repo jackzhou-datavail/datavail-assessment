@@ -70,6 +70,12 @@ or ad-hoc query writing to a production table outside any pipeline.
 See also
 [`../data-ingestion/direct-writes-to-bronze-tables.md`](../data-ingestion/direct-writes-to-bronze-tables.md).
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **CI/CD / Development Lifecycle › Use of DABs** — *supporting;* primary pattern is [`infrastructure-as-code-terraform-and-bundles.md`](infrastructure-as-code-terraform-and-bundles.md).
+
 ## References
 
 - [Developer best practices on Databricks](https://docs.databricks.com/aws/en/developers/best-practices)

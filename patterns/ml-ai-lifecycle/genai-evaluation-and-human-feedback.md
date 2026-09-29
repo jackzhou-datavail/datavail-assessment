@@ -65,6 +65,12 @@ volume, then ask which of those have a corresponding evaluation
 history. Whether human feedback is captured is an application-design
 question, visible as feedback records attached to traces.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Gen AI readiness** — *supporting;* primary pattern is [`genai-readiness-foundations.md`](genai-readiness-foundations.md).
+
 ## References
 
 - [Evaluate and improve](https://docs.databricks.com/aws/en/generative-ai/agent-evaluation/)

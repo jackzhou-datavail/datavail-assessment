@@ -69,6 +69,12 @@ list in SQL. The sharper signal is abandonment: join workspace ids in
 workspace with near-zero recent usage is an orphan candidate. Names
 that don't match the convention are the other reliable tell.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › How workspaces are split for environments** — *supporting;* primary pattern is [`environment-based-workspace-strategy.md`](environment-based-workspace-strategy.md).
+
 ## References
 
 - [Phase 2: Design workspace strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/workspace-strategy)

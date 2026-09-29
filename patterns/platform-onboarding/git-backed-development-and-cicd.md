@@ -59,6 +59,12 @@ system-table proxy is authorship churn: `system.access.audit` records
 workspaces, and a production workspace where notebooks are being
 edited interactively is the signal this pattern is missing.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **CI/CD / Development Lifecycle › Use of DABs** — *supporting;* primary pattern is [`infrastructure-as-code-terraform-and-bundles.md`](infrastructure-as-code-terraform-and-bundles.md).
+
 ## References
 
 - [Developer best practices on Databricks](https://docs.databricks.com/aws/en/developers/best-practices)

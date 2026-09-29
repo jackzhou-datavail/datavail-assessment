@@ -57,6 +57,13 @@ long failures persisted before the next successful run. A job with
 repeated failures over many days is, in practice, a job nobody is being
 told about — which is the finding, arrived at from the other end.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Platform management › Observability tools in place?** — *supporting;* primary pattern is [`observability-from-system-tables.md`](../platform-onboarding/observability-from-system-tables.md).
+- **Platform management › SLA tracking** — *supporting;* primary pattern is [`sla-tracking-and-data-freshness.md`](sla-tracking-and-data-freshness.md).
+
 ## References
 
 - [Configure and edit Lakeflow Jobs](https://docs.databricks.com/aws/en/jobs/configure-job)

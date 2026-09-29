@@ -58,6 +58,12 @@ environment separation is expressed as catalogs (good) or as
 same-catalog naming prefixes (weaker). Cross-check against
 `system.access.workspaces_latest` for the account-level list.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Workspace design › How workspaces are split for environments** — *primary.* Are workspaces split by SDLC environment and genuine isolation boundaries, with further isolation done by UC catalogs rather than more workspaces?
+
 ## References
 
 - [Phase 2: Design workspace strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/workspace-strategy)

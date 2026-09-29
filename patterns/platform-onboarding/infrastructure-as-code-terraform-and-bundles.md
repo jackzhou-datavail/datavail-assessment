@@ -62,6 +62,13 @@ the `[<target>] <bundle>` prefix that bundle deployment applies.
 `data_collection/collect_data.py` already loads both tables with their
 creator/owner fields, so the raw material for this check is present.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **CI/CD / Development Lifecycle › Use of DABs** — *primary.* Are jobs, pipelines and other workloads deployed with bundles (Declarative Automation Bundles, formerly DABs) from Git via CI/CD, by a service principal? Check job names for the bundle `[<target>]` prefix and `creator_id`.
+- **Platform management › Disaster recovery** — *supporting;* primary pattern is [`disaster-recovery-strategy.md`](disaster-recovery-strategy.md).
+
 ## References
 
 - [Phase 7: Design IaC strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/iac)

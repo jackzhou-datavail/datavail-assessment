@@ -55,6 +55,12 @@ suspiciously little for known-active tables are workspaces relying on one
 of the limitations above (path-based reads, UDF-obscured transforms) more
 heavily than they realize.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Security and Identity › Audit logging** — *supporting;* primary pattern is [`security-audit-monitoring.md`](../security-compliance/security-audit-monitoring.md).
+
 ## References
 
 - [Lineage in Unity Catalog](https://docs.databricks.com/aws/en/data-governance/unity-catalog/data-lineage)

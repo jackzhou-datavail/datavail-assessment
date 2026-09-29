@@ -72,6 +72,12 @@ consistently short, non-spilling queries on a large warehouse is the
 oversizing finding. Billable usage ranks both by actual cost, which is
 the version that gets acted on.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/BI › Warehouse right sizing/SKU** — *supporting;* primary pattern is [`serverless-sql-warehouses.md`](serverless-sql-warehouses.md).
+
 ## References
 
 - [SQL warehouse sizing, scaling, and queuing behavior](https://docs.databricks.com/aws/en/compute/sql-warehouse/warehouse-behavior)

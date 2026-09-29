@@ -60,6 +60,12 @@ endpoint — an entity that is not a UC-registered model is the finding.
 signature are visible through the MLflow API per version rather than
 through a system table.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Use of MLFlow experiments, model registry in UC** — *primary.* Is training tracked in MLflow experiments, are models registered in UC (not the legacy workspace registry), and do deployments use aliases?
+
 ## References
 
 - [Manage model lifecycle in Unity Catalog](https://docs.databricks.com/aws/en/machine-learning/manage-model-lifecycle/)

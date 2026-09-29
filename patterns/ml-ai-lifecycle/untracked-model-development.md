@@ -71,6 +71,12 @@ finding is the join gap — models served in
 `system.serving.served_entities` with no traceable training run behind
 them at all.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Use of MLFlow experiments, model registry in UC** — *supporting;* primary pattern is [`models-in-unity-catalog.md`](models-in-unity-catalog.md).
+
 ## References
 
 - [MLflow on Databricks](https://docs.databricks.com/aws/en/mlflow/)

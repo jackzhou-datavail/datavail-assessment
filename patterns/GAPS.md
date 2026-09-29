@@ -34,7 +34,13 @@ it up. Partly queryable via
 
 Estimated: 6–8 patterns.
 
-### Security & network
+### Security & network — **PARTLY CLOSED 2026-09-28**
+
+Added [security-compliance](security-compliance/) (5 patterns): secrets,
+customer-managed keys, security audit monitoring, SAT baseline, and the
+compliance security profile. Still open: private connectivity, egress
+controls, IP access lists, and token management policies.
+
 
 Customer-managed encryption keys, private/secure cluster connectivity,
 egress controls, IP access lists, compliance security profiles,
@@ -52,10 +58,12 @@ Estimated: 6–8 patterns.
   operations, state store sizing, exactly-once semantics. Partly
   covered by
   [idempotent-ingestion-with-checkpoints.md](data-ingestion/idempotent-ingestion-with-checkpoints.md).
-- **HA / disaster recovery** — Phase 10 of the deployment guide:
+- **HA / disaster recovery** — *started 2026-09-28 with
+  [disaster-recovery-strategy.md](platform-onboarding/disaster-recovery-strategy.md).* Phase 10 of the deployment guide:
   replication, RPO/RTO, multi-region posture. Small but high-stakes;
   `system.replication` exists.
-- **Delta Sharing & data products** — shares, recipients, Marketplace,
+- **Delta Sharing & data products** — *started 2026-09-28 with
+  [data-sharing](data-sharing/) (2 patterns).* shares, recipients, Marketplace,
   clean rooms. Relevant only where external sharing happens;
   `system.sharing` exists.
 

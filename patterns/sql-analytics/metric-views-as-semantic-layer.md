@@ -64,6 +64,13 @@ redefined per consumer. Dashboard and Genie definitions name their
 sources directly — consumers reading base tables rather than metric
 views is the concrete finding.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/BI › Metric centralization** — *primary.* Do metric views exist in the reporting schemas, and do dashboards, Genie and BI queries use them (`MEASURE(` in query history) rather than redefining metrics?
+- **AI/BI › 3rd Party tools used** — *supporting;* primary pattern is [`third-party-bi-tool-integration.md`](third-party-bi-tool-integration.md).
+
 ## References
 
 - [Unity Catalog metric views](https://docs.databricks.com/aws/en/uc-semantics/metric-views/)

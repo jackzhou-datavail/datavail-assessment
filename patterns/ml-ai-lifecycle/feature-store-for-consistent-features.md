@@ -59,6 +59,12 @@ tables feed training runs and whether the serving path reads the same
 ones. A feature table whose upstream pipeline has not run recently is
 visible through `system.lakeflow.pipeline_update_timeline`.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Feature management** — *primary.* Are features managed in UC Feature Store (feature tables / Feature Views) with point-in-time lookups, used for both training and serving?
+
 ## References
 
 - [Databricks Feature Store](https://docs.databricks.com/aws/en/machine-learning/feature-store/)

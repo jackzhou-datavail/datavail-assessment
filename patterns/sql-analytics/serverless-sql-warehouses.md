@@ -60,6 +60,13 @@ count far exceeding the number of distinct workloads.
 duration, and queue time — join it to the warehouse snapshot to see
 which sizes are actually justified. Billable usage attributes the cost.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/BI › Warehouse right sizing/SKU** — *primary.* Are warehouses serverless where possible, sized from spill and queue signals, with auto-stop near defaults? Check `system.compute.warehouses` against query volume.
+- **FinOps › Compute right sizing** — *supporting;* primary pattern is [`compute-right-sizing.md`](../platform-onboarding/compute-right-sizing.md).
+
 ## References
 
 - [SQL warehouse sizing, scaling, and queuing behavior](https://docs.databricks.com/aws/en/compute/sql-warehouse/warehouse-behavior)

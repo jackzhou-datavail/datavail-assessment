@@ -61,6 +61,12 @@ aren't in `system.information_schema.tables`. Confirming this needs
 `DESCRIBE HISTORY <table>` (to check whether/when `VACUUM` last ran) and
 `SHOW TBLPROPERTIES` per table.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Compliance/regulatory alignment › Data retention policies** — *supporting;* primary pattern is [`data-retention-policies.md`](../unity-catalog-governance/data-retention-policies.md).
+
 ## References
 
 - [Remove unused data files with vacuum](https://docs.databricks.com/aws/en/tables/operations/vacuum)

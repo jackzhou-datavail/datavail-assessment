@@ -60,6 +60,13 @@ through the account console / Budgets API rather than SQL.
 `system.billing.*` — adding a tag-coverage metric there would be a
 natural extension of the assessment.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **FinOps › Cost visibility (tagging for chargeback)** — *primary.* What share of spend carries business-unit / project tags, and are budgets with alerts configured for chargeback or showback?
+- **Governance and Unity Catalog › Use of tagging** — *supporting;* primary pattern is [`tagging-strategy.md`](../unity-catalog-governance/tagging-strategy.md).
+
 ## References
 
 - [Use tags to attribute and track usage](https://docs.databricks.com/aws/en/admin/account-settings/usage-detail-tags)

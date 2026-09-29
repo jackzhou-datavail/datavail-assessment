@@ -61,6 +61,12 @@ actionable version of the metric for production workloads.
 `system.access.audit` shows which identities actually performed
 production writes.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Security and Identity › SSO and identity management** — *supporting;* primary pattern is [`account-first-identity-federation.md`](account-first-identity-federation.md).
+
 ## References
 
 - [Identity best practices](https://docs.databricks.com/aws/en/admin/users-groups/best-practices)

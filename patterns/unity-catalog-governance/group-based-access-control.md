@@ -48,6 +48,12 @@ ownership specifically would need `SHOW GRANTS`/`DESCRIBE ... AS JSON`
 tooling beyond what system tables expose directly, since system tables
 don't label a given email as belonging to a "group" vs. a person.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Governance and Unity Catalog › Identity/group management on resources** — *supporting;* primary pattern is [`workspace-object-permissions.md`](../platform-onboarding/workspace-object-permissions.md).
+
 ## References
 
 - [Unity Catalog best practices](https://docs.databricks.com/aws/en/data-governance/unity-catalog/best-practices)

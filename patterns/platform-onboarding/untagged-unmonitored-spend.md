@@ -73,6 +73,13 @@ console / Budgets API rather than SQL — the finding is simply their
 absence. `data_collection/collect_data.py` does not read
 `system.billing.*` today.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Governance and Unity Catalog › Use of tagging** — *supporting;* primary pattern is [`tagging-strategy.md`](../unity-catalog-governance/tagging-strategy.md).
+- **FinOps › Cost visibility (tagging for chargeback)** — *supporting;* primary pattern is [`cost-attribution-tagging-and-budgets.md`](cost-attribution-tagging-and-budgets.md).
+
 ## References
 
 - [Use tags to attribute and track usage](https://docs.databricks.com/aws/en/admin/account-settings/usage-detail-tags)

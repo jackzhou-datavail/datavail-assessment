@@ -62,6 +62,12 @@ check is a code and secret scan for provider SDK calls and API keys
 outside endpoint configuration, plus egress or billing evidence of
 direct provider usage.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Gen AI readiness** — *supporting;* primary pattern is [`genai-readiness-foundations.md`](genai-readiness-foundations.md).
+
 ## References
 
 - [Unity Gateway](https://docs.databricks.com/aws/en/ai-gateway/)

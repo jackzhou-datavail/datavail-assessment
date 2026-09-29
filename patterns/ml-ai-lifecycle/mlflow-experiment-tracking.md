@@ -58,6 +58,12 @@ incomplete; experiments concentrated under a single `created_by` in a
 personal path. `system.mlflow.run_metrics_history` gives metric
 trajectories per run for deeper comparison.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **AI/ML › Use of MLFlow experiments, model registry in UC** — *supporting;* primary pattern is [`models-in-unity-catalog.md`](models-in-unity-catalog.md).
+
 ## References
 
 - [MLflow on Databricks](https://docs.databricks.com/aws/en/mlflow/)

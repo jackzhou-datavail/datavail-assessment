@@ -72,6 +72,12 @@ is definitionally one nobody is being told about. Rank those by whether
 anything downstream reads their output, via
 `system.access.table_lineage`.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **Platform management › Observability tools in place?** — *supporting;* primary pattern is [`observability-from-system-tables.md`](../platform-onboarding/observability-from-system-tables.md).
+
 ## References
 
 - [Configure and edit Lakeflow Jobs](https://docs.databricks.com/aws/en/jobs/configure-job)

@@ -56,6 +56,12 @@ asking about first. `data_collection/collect_data.py` does not currently
 read either table — it reads `system.lakeflow.*` for job and pipeline
 metadata, which tells you *what* runs but not what it runs on.
 
+## Assessment items addressed
+
+Items from the assessment checklist (`init_items` sheet) that this pattern helps answer.
+
+- **FinOps › Compute right sizing** — *supporting;* primary pattern is [`compute-right-sizing.md`](compute-right-sizing.md).
+
 ## References
 
 - [Phase 8: Design compute strategy](https://docs.databricks.com/aws/en/lakehouse-architecture/deployment-guide/compute)
