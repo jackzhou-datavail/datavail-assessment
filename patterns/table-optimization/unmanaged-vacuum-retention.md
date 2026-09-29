@@ -55,7 +55,7 @@ relying on time travel to recover from a bad write.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` — VACUUM
+VACUUM
 history and the `delta.deletedFileRetentionDuration` table property
 aren't in `system.information_schema.tables`. Confirming this needs
 `DESCRIBE HISTORY <table>` (to check whether/when `VACUUM` last ran) and

@@ -15,10 +15,7 @@ and which dashboards consume the results" — at both table and column
 level, with zero extra configuration required from the team. Paired with
 `system.access.audit` (who did what, when, from where), this turns "what
 changed and why does this number look wrong" from a Slack archaeology
-exercise into a query. This repo's own real-data assessment tooling is
-built entirely on this: `data_collection/collect_data.py` derives its
-flagship "direct/ad-hoc write" finding from `system.access.table_lineage`
-alone.
+exercise into a query. The "direct/ad-hoc write" finding derives from `system.access.table_lineage` alone.
 
 ## What good looks like
 

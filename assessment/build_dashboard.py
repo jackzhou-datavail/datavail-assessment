@@ -1,8 +1,7 @@
 """Generate the Platform Onboarding Assessment AI/BI dashboard.
 
 Emits a Lakeview dashboard JSON reading from the assessment result
-tables. Separate from the Datavail Assessment dashboard in
-src/dashboard/ — different data, different resource.
+tables.
 
     python build_dashboard.py --results-catalog assessment
 

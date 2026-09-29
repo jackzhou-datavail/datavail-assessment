@@ -42,15 +42,13 @@ historical data, pays a fixed tax just to plan.
 
 ## How to detect
 
-Not directly exposed by the system tables this repo's assessment queries
+Not directly exposed by the system tables this assessment queries
 today (`system.information_schema.tables` doesn't report file counts).
 `DESCRIBE DETAIL <table>` gives `numFiles` and `sizeInBytes` per table —
 dividing them yields average file size, and a bronze table averaging well
 under ~100 MB per file, fed by a `PIPELINE`/`JOB` entity in
 `system.access.table_lineage` on a frequent schedule, is the pattern to
-look for. Not currently wired into `data_collection/collect_data.py`
-(would need a per-table `DESCRIBE DETAIL` pass, which doesn't scale to
-every table in a workspace the way the other queries do) — a candidate for
+look for. This needs a per-table `DESCRIBE DETAIL` pass, which doesn't scale to every table in a workspace — a candidate for
 a future, opt-in deeper scan rather than the standard run.
 
 ## References

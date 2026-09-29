@@ -25,24 +25,24 @@ existed.
 ## What good looks like
 
 - New workloads default to serverless; choosing classic compute is a
-  documented decision with a stated reason (private networking that
-  serverless doesn't support, an unsupported runtime feature, a
-  specific instance type requirement).
+ documented decision with a stated reason (private networking that
+ serverless doesn't support, an unsupported runtime feature, a
+ specific instance type requirement).
 - Workspaces themselves are created as serverless workspaces, with
-  classic reserved for specific network or compliance requirements.
+ classic reserved for specific network or compliance requirements.
 - SQL workloads run on SQL warehouses rather than all-purpose compute —
-  Photon is included, and the warehouse autoscales on query throughput,
-  queue size, and predicted demand.
+ Photon is included, and the warehouse autoscales on query throughput,
+ queue size, and predicted demand.
 - Warehouse sizing follows the two-axis rule: **increase size (XS–XL)
-  to make single queries faster; increase cluster count to handle more
-  concurrent users** — roughly ten concurrent queries per cluster.
+ to make single queries faster; increase cluster count to handle more
+ concurrent users** — roughly ten concurrent queries per cluster.
 - Serverless usage still gets attributed: serverless usage policies
-  apply tags that land in the billable-usage system table. See
-  [`cost-attribution-tagging-and-budgets.md`](cost-attribution-tagging-and-budgets.md).
+ apply tags that land in the billable-usage system table. See
+ [`cost-attribution-tagging-and-budgets.md`](cost-attribution-tagging-and-budgets.md).
 - Where classic compute is genuinely needed, it starts from a baseline
-  configuration and is tuned against measured metrics rather than
-  guessed at, and it always runs under a compute policy — see
-  [`compute-policies-and-standard-sizing.md`](compute-policies-and-standard-sizing.md).
+ configuration and is tuned against measured metrics rather than
+ guessed at, and it always runs under a compute policy — see
+ [`compute-policies-and-standard-sizing.md`](compute-policies-and-standard-sizing.md).
 
 ## How to detect
 
@@ -52,9 +52,7 @@ versus classic DBU consumption is directly measurable — group spend by
 it. `system.compute.clusters` lists classic clusters with their
 `cluster_source`, autoscaling bounds, and auto-termination minutes;
 long-lived classic clusters with no auto-termination are the ones worth
-asking about first. `data_collection/collect_data.py` does not currently
-read either table — it reads `system.lakeflow.*` for job and pipeline
-metadata, which tells you *what* runs but not what it runs on.
+asking about first.
 
 ## Assessment items addressed
 

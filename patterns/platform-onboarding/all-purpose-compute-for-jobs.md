@@ -25,36 +25,36 @@ running on it.
 ## Impact
 
 - Direct and measurable cost: Databricks states that non-interactive
-  workloads on job compute "cost significantly less than on all-purpose
-  compute." The same work, on the wrong compute type, is billed at the
-  interactive rate.
+ workloads on job compute "cost significantly less than on all-purpose
+ compute." The same work, on the wrong compute type, is billed at the
+ interactive rate.
 - Idle spend. An all-purpose cluster kept alive for a nightly job is
-  paid for around the clock; job compute exists only for the run's
-  duration, and serverless "terminate[s] idle compute resources to save
-  costs."
+ paid for around the clock; job compute exists only for the run's
+ duration, and serverless "terminate[s] idle compute resources to save
+ costs."
 - Resource contention and non-reproducibility — a shared interactive
-  cluster carries whatever libraries and Spark configs the last user
-  installed, so a job's environment is a moving target.
+ cluster carries whatever libraries and Spark configs the last user
+ installed, so a job's environment is a moving target.
 - Blast radius: a heavy ad-hoc query on the shared cluster can starve
-  or fail the scheduled pipeline sharing it.
+ or fail the scheduled pipeline sharing it.
 - SQL workloads on all-purpose compute also forgo the Photon
-  acceleration that comes with SQL warehouses.
+ acceleration that comes with SQL warehouses.
 
 ## How to fix
 
 1. Move scheduled work to serverless compute first — it's the
-   recommended default and removes the sizing question entirely. See
-   [`serverless-first-compute.md`](serverless-first-compute.md).
+ recommended default and removes the sizing question entirely. See
+ [`serverless-first-compute.md`](serverless-first-compute.md).
 2. Where classic compute is required, use **job compute** (a job
-   cluster per run), not all-purpose.
+ cluster per run), not all-purpose.
 3. Route SQL and BI workloads to SQL warehouses, sized by the
-   size-for-latency / count-for-concurrency rule.
+ size-for-latency / count-for-concurrency rule.
 4. Enforce it rather than documenting it: compute policies can restrict
-   which compute a job may attach to, and can mandate auto-termination
-   and autoscaling bounds on what remains. See
-   [`compute-policies-and-standard-sizing.md`](compute-policies-and-standard-sizing.md).
+ which compute a job may attach to, and can mandate auto-termination
+ and autoscaling bounds on what remains. See
+ [`compute-policies-and-standard-sizing.md`](compute-policies-and-standard-sizing.md).
 5. For streaming that doesn't need real-time latency, use the
-   `AvailableNow` trigger instead of an always-on cluster.
+ `AvailableNow` trigger instead of an always-on cluster.
 
 ## How to detect
 
@@ -66,9 +66,6 @@ identifies which scheduled jobs attach to clusters whose
 `cluster_source` is `UI` or `API` rather than `JOB`.
 `system.compute.node_timeline` exposes utilization, which is how you
 find the always-on cluster that is mostly idle.
-`data_collection/collect_data.py` reads `system.lakeflow.*` for run
-history but not `system.billing.*` or `system.compute.*`, so the cost
-half of this check isn't wired up in this repo yet.
 
 ## Assessment items addressed
 

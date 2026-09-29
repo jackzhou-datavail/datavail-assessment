@@ -52,9 +52,7 @@ look at it.
 a workspace where most tables are owned by individual user emails rather
 than groups or service principals is showing this pattern structurally.
 Confirming it for *grants* (as opposed to ownership) needs `SHOW GRANTS`
-scans across objects, since system tables don't currently expose the
-grant graph the way they expose ownership — `data_collection/collect_data.py`
-covers the ownership signal today but not a full grants audit.
+scans across objects, since system tables don't currently expose the grant graph the way they expose ownership.
 
 ## Assessment items addressed
 

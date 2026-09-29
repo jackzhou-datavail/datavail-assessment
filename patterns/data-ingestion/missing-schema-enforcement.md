@@ -59,7 +59,7 @@ first version of the pipeline didn't need it.
 
 Not directly queryable from Unity Catalog system tables (schema-evolution
 configuration lives in pipeline/job source code, not metadata). The
-practical proxy this repo's assessment tooling uses instead is table
+practical proxy is table
 comment coverage and naming-convention compliance from
 `system.information_schema.tables` — a codebase where bronze tables
 generally lack comments and consistent naming is also, empirically, one

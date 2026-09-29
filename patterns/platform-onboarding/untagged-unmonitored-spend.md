@@ -27,39 +27,39 @@ unavailable.
 ## Impact
 
 - Spend cannot be attributed. Without tags, `system.billing.usage`
-  shows what was consumed but not by whom or for what — so cost
-  conversations become opinion rather than data.
+ shows what was consumed but not by whom or for what — so cost
+ conversations become opinion rather than data.
 - No early warning. Budgets exist to send "email notifications when the
-  monthly budget is reached"; without them, a runaway cluster or a
-  mis-sized warehouse runs until someone happens to look.
+ monthly budget is reached"; without them, a runaway cluster or a
+ mis-sized warehouse runs until someone happens to look.
 - Serverless is the blind spot that bites hardest: legacy DBU usage
-  reports exclude serverless usage entirely, so teams relying on those
-  reports are reading an increasingly incomplete picture as serverless
-  adoption grows.
+ reports exclude serverless usage entirely, so teams relying on those
+ reports are reading an increasingly incomplete picture as serverless
+ adoption grows.
 - Cost optimization work has nowhere to start — you cannot identify
-  "expensive queries, underutilized clusters" per team without the
-  dimension to group by.
+ "expensive queries, underutilized clusters" per team without the
+ dimension to group by.
 - Chargeback and showback to business units become impossible, which
-  in most organizations means cost accountability stays with the
-  platform team regardless of who generated the spend.
+ in most organizations means cost accountability stays with the
+ platform team regardless of who generated the spend.
 
 ## How to fix
 
 1. Define the tag convention now — keys, allowed values, and a required
-   minimum set covering business unit and project. Retrofitting the
-   convention is cheap; retrofitting the history is impossible.
+ minimum set covering business unit and project. Retrofitting the
+ convention is cheap; retrofitting the history is impossible.
 2. Apply tags through automation rather than instructions: compute
-   policies and bundle configuration for classic compute, serverless
-   usage policies for serverless notebooks, jobs, pipelines, and
-   serving endpoints. See
-   [`cost-attribution-tagging-and-budgets.md`](cost-attribution-tagging-and-budgets.md).
+ policies and bundle configuration for classic compute, serverless
+ usage policies for serverless notebooks, jobs, pipelines, and
+ serving endpoints. See
+ [`cost-attribution-tagging-and-budgets.md`](cost-attribution-tagging-and-budgets.md).
 3. Create budgets per team or project with alert thresholds (up to four
-   each), routed to the people who can act, not only to a central
-   mailbox.
+ each), routed to the people who can act, not only to a central
+ mailbox.
 4. Treat `system.billing.usage` as the authoritative source — not the
-   legacy DBU reports — and build a recurring cost review on it.
+ legacy DBU reports — and build a recurring cost review on it.
 5. Attack the largest untagged bucket first; it is usually one or two
-   always-on clusters or warehouses, not a long tail.
+ always-on clusters or warehouses, not a long tail.
 
 ## How to detect
 
@@ -70,8 +70,7 @@ it comes from. `system.compute.clusters` and
 `system.compute.warehouses` give the configuration-time view of which
 resources lack tags. Budget definitions are read through the account
 console / Budgets API rather than SQL — the finding is simply their
-absence. `data_collection/collect_data.py` does not read
-`system.billing.*` today.
+absence.
 
 ## Assessment items addressed
 

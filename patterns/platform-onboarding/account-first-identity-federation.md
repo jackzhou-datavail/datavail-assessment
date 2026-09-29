@@ -30,26 +30,26 @@ see [`../unity-catalog-governance/individual-user-grants.md`](../unity-catalog-g
 ## What good looks like
 
 - **Automatic identity management** is the recommended provisioning
-  mechanism for supported identity providers — it synchronizes users,
-  service principals, groups, and nested groups directly. SCIM remains
-  the fallback for providers it doesn't cover.
+ mechanism for supported identity providers — it synchronizes users,
+ service principals, groups, and nested groups directly. SCIM remains
+ the fallback for providers it doesn't cover.
 - SSO at the account level with MFA: OIDC for new deployments, SAML 2.0
-  where an enterprise/legacy IdP requires it. Databricks' security
-  guidance is to "use SSO with multifactor authentication to centralize
-  authentication and reduce password risks."
+ where an enterprise/legacy IdP requires it. Databricks' security
+ guidance is to "use SSO with multifactor authentication to centralize
+ authentication and reduce password risks."
 - **Account admin roles go to 2–3 trusted individuals only.** The
-  broader principle is "a limited number of account admins per account
-  and workspace admins in each workspace" — admin rights are delegated
-  down to workspace admins and feature-specific roles (metastore admin,
-  marketplace admin) rather than concentrated or handed out broadly.
+ broader principle is "a limited number of account admins per account
+ and workspace admins in each workspace" — admin rights are delegated
+ down to workspace admins and feature-specific roles (metastore admin,
+ marketplace admin) rather than concentrated or handed out broadly.
 - The admin model matches the organization: centralized for small
-  teams, federated for large ones, segregated-duties for regulated
-  industries.
+ teams, federated for large ones, segregated-duties for regulated
+ industries.
 - Access is granted to groups, never to individuals: "assign access to
-  workspaces and access-control policies in Unity Catalog to groups,
-  instead of to users individually."
+ workspaces and access-control policies in Unity Catalog to groups,
+ instead of to users individually."
 - Service principals — not human accounts — run automation. See
-  [`service-principals-for-automation.md`](service-principals-for-automation.md).
+ [`service-principals-for-automation.md`](service-principals-for-automation.md).
 
 ## How to detect
 
@@ -61,9 +61,7 @@ whether SSO is enforced. The indirect signal that shows up in data is
 ownership: `system.lakeflow.jobs` / `pipelines` `run_as` and
 `system.information_schema.tables.table_owner` values that are
 individual user emails rather than group or service-principal
-identities. `data_collection/collect_data.py` already reads those fields
-for its `has_owner_tag` signal, though it treats any non-null owner as
-positive and does not distinguish a person from a group.
+identities.
 
 ## Assessment items addressed
 

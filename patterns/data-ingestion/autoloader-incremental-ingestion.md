@@ -41,7 +41,6 @@ real scale.
 
 ## How to detect
 
-From this repo's real-data assessment (`data_collection/collect_data.py`):
 `system.lakeflow.pipelines` and `system.lakeflow.jobs` show which
 ingestion workloads exist and their `run_as` owner; `system.access.table_lineage`
 with `entity_type = 'PIPELINE'` on the write side indicates a governed,

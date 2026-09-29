@@ -40,10 +40,7 @@ membership change.
 `system.information_schema.tables.table_owner` and the equivalent for
 pipelines/jobs (`run_as`/`created_by` in `system.lakeflow.pipelines`/`jobs`)
 show whether an object's owner is a real individual user email or a
-group/service-principal identity. `data_collection/collect_data.py`
-already treats "owner looks like a real user email" as a *positive* signal
-(`has_owner_tag`) for the simpler question of "is anyone accountable at
-all" — distinguishing individual-user ownership from group/service-principal
+group/service-principal identity. Distinguishing individual-user ownership from group/service-principal
 ownership specifically would need `SHOW GRANTS`/`DESCRIBE ... AS JSON`
 tooling beyond what system tables expose directly, since system tables
 don't label a given email as belonging to a "group" vs. a person.

@@ -63,8 +63,7 @@ folder; production notebooks outside one are the direct finding. In
 system tables, `system.access.audit` records notebook and workspace
 file events, so interactive edits in a production workspace — and who
 made them — are visible there.
-`data_collection/collect_data.py` reads `system.access.table_lineage`
-filtered on `entity_type` of `NOTEBOOK` / `DBSQL_QUERY` to find direct
+`system.access.table_lineage` filtered on `entity_type` of `NOTEBOOK` / `DBSQL_QUERY` finds direct
 ad-hoc writes to tables, which is the closely related signal: a notebook
 or ad-hoc query writing to a production table outside any pipeline.
 See also

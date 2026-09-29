@@ -35,13 +35,13 @@ and keeps classification current without waiting for a manual audit.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` — classification
+Classification
 tags live in Unity Catalog's tag surface
 (`information_schema.column_tags`, `SHOW TAGS`), not in
 `system.information_schema.tables`. Once wired up, the practical
 anti-pattern is the same as for ABAC generally: columns whose names imply
 sensitive content but that carry no `class.*` tag, especially in schemas
-that also show a high proportion of tables with `has_owner_tag = FALSE` —
+that also show a high proportion of unowned tables —
 low ownership accountability and missing classification tend to go
 together.
 

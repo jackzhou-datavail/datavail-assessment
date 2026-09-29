@@ -53,11 +53,8 @@ production data.
 tell you directly whether each production workload runs under a person
 or a service principal — a service principal appears as a UUID-style
 application id rather than an email address.
-`data_collection/collect_data.py` reads both tables and derives
-`has_owner_tag` from the owner/creator fields, but it treats any
-non-null owner as good; splitting "owned by a human" from "owned by a
-service principal" is a one-line change to that logic and is the more
-actionable version of the metric for production workloads.
+Splitting "owned by a human" from "owned by a
+service principal" is the more actionable version of the metric for production workloads.
 `system.access.audit` shows which identities actually performed
 production writes.
 

@@ -39,7 +39,7 @@ inline with every DML statement.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` — deletion
+Deletion
 vector enablement is a table property, not something exposed in
 `system.information_schema.tables`. Checking it means `DESCRIBE TABLE
 EXTENDED` or `SHOW TBLPROPERTIES` per table (`delta.enableDeletionVectors`).

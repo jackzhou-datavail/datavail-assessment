@@ -19,26 +19,24 @@ recommended default for all Unity Catalog managed tables.
 ## What good looks like
 
 - Predictive optimization is enabled account-wide (it's on by default for
-  accounts created on/after 2024-11-11; older accounts are on a rollout
-  Databricks expects to complete by August 2026 — worth confirming rather
-  than assuming for any pre-existing account).
+ accounts created on/after 2024-11-11; older accounts are on a rollout
+ Databricks expects to complete by August 2026 — worth confirming rather
+ than assuming for any pre-existing account).
 - It runs three operations automatically per table: `OPTIMIZE` (including
-  incremental clustering for tables using `CLUSTER BY`/`CLUSTER BY AUTO` —
-  note it does *not* run `ZORDER`, which only matters for tables still on
-  the legacy Z-ORDER strategy), `VACUUM` (removing unreferenced files),
-  and `ANALYZE` (refreshing the statistics the query optimizer depends on
-  for good query plans).
+ incremental clustering for tables using `CLUSTER BY`/`CLUSTER BY AUTO` —
+ note it does *not* run `ZORDER`, which only matters for tables still on
+ the legacy Z-ORDER strategy), `VACUUM` (removing unreferenced files),
+ and `ANALYZE` (refreshing the statistics the query optimizer depends on
+ for good query plans).
 - Teams understand its scope: it only covers Unity Catalog **managed**
-  tables — external tables and tables loaded via OpenSharing aren't
-  covered and still need an explicit maintenance strategy.
+ tables — external tables and tables loaded via OpenSharing aren't
+ covered and still need an explicit maintenance strategy.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py`. Predictive
+ Predictive
 optimization's enablement status is an account/metastore-level setting,
-not a per-table system-table field — checking it means an explicit
-`SYSTEM.INFORMATION_SCHEMA` or admin-console lookup rather than something
-derivable from the tables this repo currently reads. The downstream
+not a per-table system-table field — checking it means an explicit `SYSTEM.INFORMATION_SCHEMA` or admin-console lookup. The downstream
 symptom — small-file accumulation on managed tables — is covered in
 [`../data-ingestion/small-file-accumulation.md`](../data-ingestion/small-file-accumulation.md).
 

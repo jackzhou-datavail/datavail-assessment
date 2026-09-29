@@ -36,12 +36,11 @@ be set directly).
 
 ## How to detect
 
-Tag presence/absence isn't currently queried by
-`data_collection/collect_data.py` — Unity Catalog exposes governed tags
+Unity Catalog exposes governed tags
 via `information_schema.catalog_tags`/`schema_tags`/`table_tags`/
 `column_tags` and the `SHOW TAGS`/`DESCRIBE ... AS JSON` surface, which
 would need to be added as a dedicated query pass (tags aren't part of
-`system.information_schema.tables`, the table this repo currently reads).
+`system.information_schema.tables`).
 The practical anti-pattern signal, once that's wired up, is columns with
 names strongly suggesting sensitive content (`ssn`, `email`, `dob`, etc.)
 that carry no classification tag at all.

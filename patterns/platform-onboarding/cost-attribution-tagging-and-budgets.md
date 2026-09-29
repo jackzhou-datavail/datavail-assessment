@@ -31,21 +31,21 @@ and send email notifications when a threshold is crossed.
 ## What good looks like
 
 - A documented tag convention (keys and allowed values) defined during
-  onboarding, with a minimum set — business unit, project, environment
-  — required on every resource.
+ onboarding, with a minimum set — business unit, project, environment
+ — required on every resource.
 - Tags applied by IaC, not by hand: compute policies and bundle
-  configuration set them so a resource cannot be created untagged. For
-  serverless, that means serverless usage policies.
+ configuration set them so a resource cannot be created untagged. For
+ serverless, that means serverless usage policies.
 - Budgets per team/project with alert thresholds (up to four per
-  budget) routed to the people who can act on them — not only to a
-  central FinOps mailbox.
+ budget) routed to the people who can act on them — not only to a
+ central FinOps mailbox.
 - A recurring review against `system.billing.usage`: which workloads
-  cost the most, which clusters are underutilized, which queries are
-  expensive. Databricks frames cost management as "an ongoing process,"
-  including audits and team education, not a one-time setup.
+ cost the most, which clusters are underutilized, which queries are
+ expensive. Databricks frames cost management as "an ongoing process,"
+ including audits and team education, not a one-time setup.
 - Awareness that budgets track **list pricing** and do not account for
-  credits or negotiated discounts — useful for trend and attribution,
-  not for reconciling the invoice.
+ credits or negotiated discounts — useful for trend and attribution,
+ not for reconciling the invoice.
 
 ## How to detect
 
@@ -56,9 +56,6 @@ workspace shows where to start. `system.compute.clusters` and
 `system.compute.warehouses` expose per-resource tags for a
 configuration-time view of the same gap. Budgets themselves are read
 through the account console / Budgets API rather than SQL.
-`data_collection/collect_data.py` does not currently read
-`system.billing.*` — adding a tag-coverage metric there would be a
-natural extension of the assessment.
 
 ## Assessment items addressed
 

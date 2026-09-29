@@ -48,16 +48,7 @@ group-membership change.
 
 ## How to detect
 
-This repo's real-data assessment already computes exactly this signal:
-`data_collection/collect_data.py` reads `table_owner` from
-`system.information_schema.tables` (and the equivalent `run_as`/
-`creator_user_name` fields from `system.lakeflow.pipelines`/`jobs`) and
-flags `has_owner_tag = FALSE` where the owner isn't a resolvable real
-identity at all. A workspace with a high proportion of `has_owner_tag =
-FALSE` pipelines/jobs, or tables owned by individuals rather than groups,
-is showing this pattern — see `gold_pipeline_health` and the
-`unowned_pipeline_findings`/`unowned_job_findings` CTEs in
-`gold_remediation_backlog`.
+The signal is `table_owner` in `system.information_schema.tables`, and the equivalent `run_as` / `creator_user_name` fields in `system.lakeflow.pipelines` and `system.lakeflow.jobs`. Flag objects whose owner is not a resolvable identity at all, and separately those owned by an individual rather than a group or service principal. A workspace with a high proportion of either is showing this pattern.
 
 ## References
 

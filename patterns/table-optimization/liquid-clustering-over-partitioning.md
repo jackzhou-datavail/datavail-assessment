@@ -36,10 +36,9 @@ and future `OPTIMIZE` runs pick up the new keys incrementally.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` — clustering
+Clustering
 configuration lives in `DESCRIBE TABLE EXTENDED` / `information_schema.tables`'s
-clustering columns, not in the subset of `system.information_schema.tables`
-fields this repo currently reads. The practical anti-pattern to look for
+clustering columns, not in `system.information_schema.tables`. The practical anti-pattern to look for
 is covered in [`over-partitioning.md`](over-partitioning.md): tables under
 1 TB with a manually chosen partition column and no clustering keys are
 the clearest sign this pattern wasn't adopted.

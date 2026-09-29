@@ -68,8 +68,7 @@ notebook, the notebook is in Git, and the credential is in Git history.
 show an email address for a human-owned workload and an application id
 for a service-principal-owned one — counting production workloads in
 the first category is the primary check.
-`data_collection/collect_data.py` reads both tables and derives
-`has_owner_tag`, but scores any non-null owner as good; separating
+Separating
 "human" from "service principal" is the sharper metric for production.
 Hardcoded credentials are not visible in system tables at all — that
 check is a secret-scanning pass over the repo and over notebook

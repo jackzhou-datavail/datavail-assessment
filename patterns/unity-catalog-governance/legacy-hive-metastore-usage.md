@@ -36,9 +36,7 @@ such as built-in auditing, lineage, and access control." Concretely:
   under load that UC doesn't have.
 - Every table left in Hive metastore is a blind spot in any
   workspace-wide governance or assessment effort built on UC system
-  tables — including this repo's own `data_collection/collect_data.py`,
-  which reads `system.information_schema.tables` and therefore doesn't
-  see Hive metastore objects at all.
+  tables — any tooling built on `system.information_schema.tables` cannot see Hive metastore objects at all.
 
 ## How to fix
 

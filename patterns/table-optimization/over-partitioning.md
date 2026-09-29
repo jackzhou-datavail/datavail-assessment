@@ -54,8 +54,7 @@ Databricks' recommended 1 GB-per-partition floor.
 ## How to detect
 
 Partition column and partition count/size aren't part of
-`system.information_schema.tables` (the table `data_collection/collect_data.py`
-currently reads) — confirming this needs `DESCRIBE DETAIL <table>`
+`system.information_schema.tables` — confirming this needs `DESCRIBE DETAIL <table>`
 (`numFiles`, `sizeInBytes`, and `partitionColumns`) per table. The
 practical signal is a table whose average file size sits well below the
 ~1 GB-per-partition guidance, paired with a date/timestamp-looking

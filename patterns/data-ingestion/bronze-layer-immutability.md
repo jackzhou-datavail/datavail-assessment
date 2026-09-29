@@ -36,14 +36,11 @@ from lineage alone.
 
 ## How to detect
 
-This is the flagship signal `data_collection/collect_data.py` computes on
-the `real_data` branch: `system.access.table_lineage` rows where
+The signal is `system.access.table_lineage` rows where
 `target_table_full_name` matches a bronze-layer table and `entity_type` is
 `NULL`, `NOTEBOOK`, or `DBSQL_QUERY` (i.e. the write did *not* come from a
-governed `JOB` or `PIPELINE` run). See `gold_bronze_table_edits` and the
-`direct_write_findings` CTE in `gold_remediation_backlog` for the exact
-query. A table with a nonzero count there is a live instance of this
-anti-pattern — see
+governed `JOB` or `PIPELINE` run). A table with a nonzero count is a
+live instance of this anti-pattern — see
 [`direct-writes-to-bronze-tables.md`](direct-writes-to-bronze-tables.md).
 
 ## Assessment items addressed

@@ -20,39 +20,35 @@ Enabling them early is therefore load-bearing for everything else in
 this category. Cost attribution needs `system.billing.usage`; ownership
 and access review need `system.access.audit` and
 `system.information_schema`; job reliability needs
-`system.lakeflow.job_run_timeline`. This repo's own assessment is built
-entirely on that foundation — `data_collection/collect_data.py` reads
-`system.access.table_lineage`, `system.lakeflow.*`, `system.mlflow.*`,
-`system.serving.*`, and `system.information_schema.tables`, and
-fabricates nothing.
+`system.lakeflow.job_run_timeline`.
 
 ## What good looks like
 
 - System tables enabled across **all** metastores, not just the one
-  someone was investigating an incident in.
+ someone was investigating an incident in.
 - **Cost monitoring dashboards** in place — the account cost-management
-  AI/BI dashboards imported into a UC-enabled workspace, or custom
-  dashboards on `system.billing.usage` — reviewed on a schedule; see
-  [`spend-trend-monitoring.md`](spend-trend-monitoring.md).
+ AI/BI dashboards imported into a UC-enabled workspace, or custom
+ dashboards on `system.billing.usage` — reviewed on a schedule; see
+ [`spend-trend-monitoring.md`](spend-trend-monitoring.md).
 - Job and pipeline failures raise something: "email notifications or
-  webhooks for critical job failures," with SLA tracking queried from
-  `system.lakeflow.job_run_timeline` rather than watched by hand.
+ webhooks for critical job failures," with SLA tracking queried from
+ `system.lakeflow.job_run_timeline` rather than watched by hand.
 - Defined SLAs and alert thresholds for critical workloads, and
-  runbooks documented for the operational scenarios those alerts fire
-  on.
+ runbooks documented for the operational scenarios those alerts fire
+ on.
 - Data quality monitors on critical production tables — "especially
-  gold layer tables" — using time-series or snapshot monitoring.
+ gold layer tables" — using time-series or snapshot monitoring.
 - Query performance investigated with query profiles on serverless/SQL
-  warehouses (stage-level execution metrics) and the Spark UI for
-  classic compute.
+ warehouses (stage-level execution metrics) and the Spark UI for
+ classic compute.
 - Model serving endpoints monitored through inference tables: request
-  counts, latency, throughput.
+ counts, latency, throughput.
 - Third-party integration (Datadog, Prometheus, CloudWatch) where the
-  organization needs one pane of glass — but the Databricks-side source
-  of truth stays the system tables.
+ organization needs one pane of glass — but the Databricks-side source
+ of truth stays the system tables.
 - Granularity is chosen deliberately: Databricks' own caveat is to
-  "balance monitoring granularity with operational overhead and costs"
-  rather than turning on everything at once.
+ "balance monitoring granularity with operational overhead and costs"
+ rather than turning on everything at once.
 
 ## How to detect
 

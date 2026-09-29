@@ -49,8 +49,7 @@ get created.
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` (tags aren't
-part of `system.information_schema.tables`). Once a tag-reading pass is
+Tags aren't part of `system.information_schema.tables`. Once a tag-reading pass is
 added, the concrete check is: columns whose names match common
 sensitive-data patterns (`ssn`, `email`, `dob`, `phone`, `address`, etc.)
 cross-referenced against `information_schema.column_tags` for a

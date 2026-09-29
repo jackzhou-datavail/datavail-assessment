@@ -48,12 +48,12 @@ reason `OPTIMIZE`/`VACUUM` get skipped — see
 
 ## How to detect
 
-Not currently queried by `data_collection/collect_data.py` — statistics
+Statistics
 freshness isn't part of `system.information_schema.tables`. Confirming
 this needs `DESCRIBE TABLE EXTENDED <table>` or `DESCRIBE DETAIL`, and
 comparing the last-analyzed timestamp against how much the table has
 actually changed since (row count, `last_altered` from
-`system.information_schema.tables`, which this repo already reads).
+`system.information_schema.tables`).
 
 ## References
 

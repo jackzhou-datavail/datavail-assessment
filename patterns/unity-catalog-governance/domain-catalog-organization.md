@@ -34,8 +34,7 @@ judgment call made from scratch.
 
 ## How to detect
 
-`system.information_schema.tables` (queried by
-`data_collection/collect_data.py`) gives the actual catalog/schema/table
+`system.information_schema.tables` gives the actual catalog/schema/table
 inventory of a workspace — a proliferation of ad-hoc, inconsistently-named
 catalogs with no discernible env/domain pattern, or medallion-layer
 sprawl across catalogs rather than within them, is the practical signal
