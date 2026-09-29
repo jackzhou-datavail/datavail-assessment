@@ -3,9 +3,9 @@
 Emits a Lakeview dashboard JSON reading from the assessment result
 tables.
 
-    python build_dashboard.py --results-catalog assessment
+    python -m datavail_assessment.conformance.dashboard.build --results-catalog assessment
 
-Writes assessment/dashboard.lvdash.json. Deploy with deploy_dashboard.py.
+Writes dashboard.lvdash.json beside this file.
 
 Scoring shown here is deliberately two-dimensional: every score is
 paired with the coverage it was computed from, and a category whose

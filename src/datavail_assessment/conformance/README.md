@@ -1,6 +1,7 @@
-# Platform Assessment Collector
+# Conformance Assessment
 
-Measures a Databricks workspace against the [pattern library](../patterns/),
+Measures how well a workspace follows documented Databricks practice,
+scoring it against the [pattern library](../../patterns/),
 and writes the result to a dedicated catalog that is itself excluded
 from assessment scope.
 
@@ -19,30 +20,29 @@ tables. Use whichever suits the moment.
 
 ### 1. Locally, from a laptop (no cluster required)
 
-`run_via_sql_warehouse.py` drives everything through the SQL Statement
+`--profile/--warehouse-id` drives everything through the SQL Statement
 Execution API using the Databricks CLI. It needs no pyspark, no
 databricks-connect and no cluster — just a profile and a warehouse id.
 This is the fastest loop for developing checks and for one-off runs.
 
 ```bash
-python run_via_sql_warehouse.py \
+python -m datavail_assessment.conformance.run \
   --profile uc-semantics \
   --warehouse-id <warehouse-id> \
   --results-catalog assessment \
   --lookback-days 30
 
 # run every check and print the result, writing nothing
-python run_via_sql_warehouse.py --profile <p> --warehouse-id <id> --dry-run
+python -m datavail_assessment.conformance.run --profile <p> --warehouse-id <id> --dry-run
 ```
 
 ### 2. As a scheduled Databricks job
 
-`run_assessment.py` is the same collector against a Spark session, for
+`--spark` runs the same collector against a Spark session, for
 running inside the workspace on serverless job compute. It is deployed
 by the bundle in `databricks.yml`:
 
 ```bash
-cd assessment
 databricks bundle deploy -p <profile>
 databricks bundle run platform_assessment_collect -p <profile> --var alert_email=<group-alias>
 ```
@@ -54,7 +54,7 @@ its own.
 
 | | Local | Job |
 |---|---|---|
-| Script | `run_via_sql_warehouse.py` | `run_assessment.py` |
+| Flag | `--profile` + `--warehouse-id` | `--spark` |
 | Compute | SQL warehouse via the CLI | serverless job compute |
 | Needs pyspark | no | provided by the runtime |
 | Good for | developing checks, ad-hoc runs, debugging | scheduled refresh |
@@ -147,7 +147,7 @@ list.
 
 So 42 of 78 patterns (54%) can produce a number today. The rest report
 `NOT_AVAILABLE` with the tier's reason attached. That is the intended
-behaviour, not a defect — see [../patterns/GAPS.md](../patterns/GAPS.md)
+behaviour, not a defect — see [../../patterns/GAPS.md](../../patterns/GAPS.md)
 for the full gap analysis.
 
 ## Status of the SQL — read this before trusting a first run
@@ -191,12 +191,14 @@ significant ones are:
 ## Layout
 
 ```
-assessment/
-  registry.yaml        78 patterns: severity, weight, tier, thresholds, applicability
-  schema.sql           result schema DDL (${results_catalog} / ${results_schema})
-  lib.py               registry loader, capability preflight, scoring
+src/datavail_assessment/core/              shared runtime: executors, preflight, scoring,
+                       result schema, run loop  (see ../../README.md)
+src/datavail_assessment/conformance/
+  registry.yaml        98 patterns: severity, weight, tier, thresholds, applicability
+  registry.py          pattern registry loader
   checks.py            the 42 implemented checks
-  run_assessment.py    driver / entry point
+  run.py               entry point - warehouse by default, --spark for a job
+  dashboard/           generator, published JSON, and the panel guide
 ```
 
 `registry.yaml` stores no titles — they are read from the markdown at

@@ -13,14 +13,13 @@
 # collector locally stays fully supported and is unaffected by deploying
 # or destroying this bundle:
 #
-#   python run_via_sql_warehouse.py --profile <p> --warehouse-id <id>
+#   python -m src.conformance.run --profile <p> --warehouse-id <id>
 #
 # The local path needs no cluster and no pyspark; this job runs the same
 # checks on serverless compute. Both append a new run_id to the same
 # tables, and the dashboard reads whichever ran most recently.
 #
 # ── Deploy ─────────────────────────────────────────────────────────────────
-#   cd assessment
 #   databricks bundle deploy -p <profile> --var warehouse_id=<id>
 #   databricks bundle run platform_assessment_collect -p <profile> --var warehouse_id=<id>
 #
@@ -48,13 +47,18 @@ variables:
     description: "Where job failures are sent. Use a group alias, not a person."
     default: ""
 
-# The collector reads pattern titles from the markdown, so patterns/ must be
-# synced alongside the code. Without it the job still runs, but the dashboard's
-# Pattern column falls back to showing raw ids.
-sync:
-  paths:
-    - .
-    - ../patterns
+# The bundle root is the repo root, so src/ and patterns/ both sync by
+# default. patterns/ is required: the registry reads pattern titles from the
+# markdown, and without it the dashboard's Pattern column falls back to ids.
+
+# The collector ships as a wheel, installed by the job environment below.
+# job_entry.py is a three-line launcher that imports it: an exec()d script has
+# no __file__, so the code it calls into must not depend on one.
+artifacts:
+  collector_wheel:
+    type: whl
+    path: .
+    build: pip wheel . -w dist --no-deps
 
 targets:
   dev:
@@ -70,28 +74,27 @@ targets:
 resources:
   jobs:
     platform_assessment_collect:
-      name: "[${bundle.target}] Platform Onboarding Assessment — Collect"
+      name: "[${bundle.target}] Platform Onboarding Assessment — Conformance Collect"
       description: >-
         Runs the pattern-library checks against this workspace's system tables
         and writes conformance results to ${var.results_catalog}.${var.results_schema}.
 
       tasks:
-        # Registry and patterns paths are passed explicitly. spark_python_task
-        # on serverless exec()s the file without defining __file__, so the
-        # script cannot reliably derive its own location; these workspace
-        # paths are deterministic. Running locally needs neither flag.
+        # --spark selects the Spark executor. --patterns-dir points at the
+        # directory the bundle synced; the pattern library is repo data that
+        # people edit, so it is not packaged into the wheel. The registry IS
+        # package data, so it needs no flag.
         - task_key: collect
           spark_python_task:
-            python_file: ./run_assessment.py
+            python_file: ./job_entry.py
             parameters:
+              - "--spark"
               - "--results-catalog"
               - "${var.results_catalog}"
               - "--results-schema"
               - "${var.results_schema}"
               - "--lookback-days"
               - "${var.lookback_days}"
-              - "--registry"
-              - "${workspace.file_path}/assessment/registry.yaml"
               - "--patterns-dir"
               - "${workspace.file_path}/patterns"
           environment_key: collector
@@ -106,10 +109,11 @@ resources:
         - environment_key: collector
           spec:
             client: "4"
-            # lib.py falls back to its own parser when PyYAML is absent, so
-            # there are no hard dependencies. PyYAML is listed only because it
-            # gives better error messages on a malformed registry.
+            # The registry loader falls back to its own parser when PyYAML is
+            # absent, so PyYAML is listed only for better errors on a
+            # malformed registry.
             dependencies:
+              - ./dist/*.whl
               - "pyyaml>=6.0"
 
       # Weekly. Assessment drift is a slow signal; daily adds cost without

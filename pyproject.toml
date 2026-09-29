@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datavail-assessment"
+version = "2.0.0"
+description = "Databricks workspace assessment: conformance to documented practice, and platform adoption"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# PyYAML gives better errors on a malformed registry. The loader falls
+# back to its own parser when it is absent, so it is not required.
+yaml = ["pyyaml>=6.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+datavail_assessment = ["core/*.sql", "conformance/*.yaml", "conformance/dashboard/*.json"]

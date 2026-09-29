@@ -859,15 +859,18 @@ REQUIRED_SYSTEM_SCHEMAS = [
 ]
 
 
-def check_system_schema_enablement(spark, params):
+def check_system_schema_enablement(executor, params):
     """observability-from-system-tables / lineage-and-audit-via-system-tables.
 
     Conforming = required system schema is readable from this workspace.
+
+    Takes the executor rather than a Spark session, so the same check
+    runs unchanged through a SQL warehouse or through Spark.
     """
     enabled, findings = 0, []
     for schema in REQUIRED_SYSTEM_SCHEMAS:
         try:
-            spark.sql(f"SHOW TABLES IN system.{schema}").limit(1).collect()
+            executor.query(f"SHOW TABLES IN system.{schema}")
             enabled += 1
         except Exception as exc:  # noqa: BLE001 - reported, not raised
             findings.append(
@@ -875,6 +878,7 @@ def check_system_schema_enablement(spark, params):
                     "object_type": "SCHEMA",
                     "object_id": f"system.{schema}",
                     "object_name": f"system.{schema}",
+                    "owner": None,
                     "metric_name": "not_readable",
                     "metric_value": 1.0,
                     "detail": str(exc)[:500],

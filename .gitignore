@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 .databricks/
+.dashboard_id
 
 # Excel lock files
 ~$*
+dist/
+build/
+*.egg-info/
