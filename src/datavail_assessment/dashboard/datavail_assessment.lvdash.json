@@ -1,0 +1,754 @@
+{
+  "datasets": [
+    {
+      "name": "adopt_overall",
+      "displayName": "Adoption Overall",
+      "queryLines": [
+        "SELECT\n",
+        "  score_pct        AS overall_pct,\n",
+        "  grade            AS overall_grade,\n",
+        "  points,\n",
+        "  max_points,\n",
+        "  active_count,\n",
+        "  minimal_count,\n",
+        "  none_count,\n",
+        "  run_ts\n",
+        "FROM assessment.results.adoption_section_score\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND section = 'OVERALL'\n"
+      ]
+    },
+    {
+      "name": "adopt_sections",
+      "displayName": "Adoption by Section",
+      "queryLines": [
+        "SELECT\n",
+        "  section,\n",
+        "  score_pct,\n",
+        "  grade,\n",
+        "  points,\n",
+        "  max_points,\n",
+        "  active_count,\n",
+        "  minimal_count,\n",
+        "  none_count,\n",
+        "  weight\n",
+        "FROM assessment.results.adoption_section_score\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND section <> 'OVERALL'\n"
+      ]
+    },
+    {
+      "name": "adopt_checks",
+      "displayName": "Adoption Checks",
+      "queryLines": [
+        "SELECT\n",
+        "  section,\n",
+        "  check_id,\n",
+        "  check_name,\n",
+        "  label,\n",
+        "  score,\n",
+        "  raw_value,\n",
+        "  COALESCE(detail, '') AS detail,\n",
+        "  CASE WHEN error IS NULL THEN 'measured' ELSE 'not measurable' END AS measurable\n",
+        "FROM assessment.results.adoption_check_history\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1)\n",
+        "ORDER BY check_id\n"
+      ]
+    },
+    {
+      "name": "adopt_label_mix",
+      "displayName": "Check Mix by Section",
+      "queryLines": [
+        "SELECT section, label, COUNT(*) AS n_checks\n",
+        "FROM assessment.results.adoption_check_history\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1)\n",
+        "GROUP BY section, label\n"
+      ]
+    },
+    {
+      "name": "adopt_gaps",
+      "displayName": "Unused Capabilities",
+      "queryLines": [
+        "SELECT\n",
+        "  section,\n",
+        "  check_id,\n",
+        "  check_name,\n",
+        "  raw_value,\n",
+        "  COALESCE(error, '') AS error\n",
+        "FROM assessment.results.adoption_check_history\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND score = 0\n",
+        "ORDER BY section, check_id\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "adoption",
+      "displayName": "Adoption",
+      "layout": [
+        {
+          "widget": {
+            "name": "adopt_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Adoption\n",
+                "\n",
+                "Which parts of the Databricks platform this workspace actually uses. Each of 51 checks scores **ACTIVE** (in real use), **MINIMAL** (present, barely used) or **NONE** (no evidence).\n",
+                "\n",
+                "This is breadth, not quality. A workspace can use a capability heavily and use it badly \u2014 that is a different question, and a different page.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_pct",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "overall_pct",
+                      "expression": "`overall_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "overall_pct",
+                  "displayName": "Adoption Score"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Adoption Score",
+                "showDescription": true,
+                "description": "Section percentages, weighted by section"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_grade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "overall_grade",
+                      "expression": "`overall_grade`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "overall_grade",
+                  "displayName": "Adoption Level"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Adoption Level",
+                "showDescription": true,
+                "description": "NOT ADOPTED / EARLY STAGE / PARTIALLY / BROADLY / FULLY LEVERAGED"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_active",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "active_count",
+                      "expression": "`active_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "active_count",
+                  "displayName": "Capabilities Active"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Capabilities Active",
+                "showDescription": true,
+                "description": "Checks scoring 2 \u2014 in real use"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_minimal",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "minimal_count",
+                      "expression": "`minimal_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "minimal_count",
+                  "displayName": "Barely Used"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Barely Used",
+                "showDescription": true,
+                "description": "Checks scoring 1 \u2014 present but minimal"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_none",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "none_count",
+                      "expression": "`none_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "none_count",
+                  "displayName": "Unused"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Unused",
+                "showDescription": true,
+                "description": "Checks scoring 0 \u2014 no evidence of use"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_section_bars",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_sections",
+                  "fields": [
+                    {
+                      "name": "score_pct",
+                      "expression": "`score_pct`"
+                    },
+                    {
+                      "name": "section",
+                      "expression": "`section`"
+                    },
+                    {
+                      "name": "grade",
+                      "expression": "`grade`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "score_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "section",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "grade",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "NOT ADOPTED",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "EARLY",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "DEVELOPING",
+                        "color": "#3B82F6"
+                      },
+                      {
+                        "value": "STRONG",
+                        "color": "#10B981"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Adoption by Section",
+                "showDescription": true,
+                "description": "Percentage of available points per platform area, coloured by grade."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 7,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_mix_pie",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_label_mix",
+                  "fields": [
+                    {
+                      "name": "label",
+                      "expression": "`label`"
+                    },
+                    {
+                      "name": "n_checks",
+                      "expression": "`n_checks`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "n_checks",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "label",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "NONE",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "MINIMAL",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "ACTIVE",
+                        "color": "#10B981"
+                      }
+                    ]
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Check Mix",
+                "showDescription": true,
+                "description": "How the 51 checks resolved across every section."
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 8,
+            "width": 5,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_section_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_sections",
+                  "fields": [
+                    {
+                      "name": "section",
+                      "expression": "`section`"
+                    },
+                    {
+                      "name": "grade",
+                      "expression": "`grade`"
+                    },
+                    {
+                      "name": "score_pct",
+                      "expression": "`score_pct`"
+                    },
+                    {
+                      "name": "points",
+                      "expression": "`points`"
+                    },
+                    {
+                      "name": "max_points",
+                      "expression": "`max_points`"
+                    },
+                    {
+                      "name": "active_count",
+                      "expression": "`active_count`"
+                    },
+                    {
+                      "name": "minimal_count",
+                      "expression": "`minimal_count`"
+                    },
+                    {
+                      "name": "none_count",
+                      "expression": "`none_count`"
+                    },
+                    {
+                      "name": "weight",
+                      "expression": "`weight`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "section",
+                    "displayName": "Section"
+                  },
+                  {
+                    "fieldName": "grade",
+                    "displayName": "Grade"
+                  },
+                  {
+                    "fieldName": "score_pct",
+                    "displayName": "Score %"
+                  },
+                  {
+                    "fieldName": "points",
+                    "displayName": "Points"
+                  },
+                  {
+                    "fieldName": "max_points",
+                    "displayName": "Max"
+                  },
+                  {
+                    "fieldName": "active_count",
+                    "displayName": "Active"
+                  },
+                  {
+                    "fieldName": "minimal_count",
+                    "displayName": "Minimal"
+                  },
+                  {
+                    "fieldName": "none_count",
+                    "displayName": "Unused"
+                  },
+                  {
+                    "fieldName": "weight",
+                    "displayName": "Weight"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Section Scorecard",
+                "showDescription": true,
+                "description": "Weight is each section's share of the overall score."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_gaps_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_gaps",
+                  "fields": [
+                    {
+                      "name": "section",
+                      "expression": "`section`"
+                    },
+                    {
+                      "name": "check_id",
+                      "expression": "`check_id`"
+                    },
+                    {
+                      "name": "check_name",
+                      "expression": "`check_name`"
+                    },
+                    {
+                      "name": "raw_value",
+                      "expression": "`raw_value`"
+                    },
+                    {
+                      "name": "error",
+                      "expression": "`error`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "section",
+                    "displayName": "Section"
+                  },
+                  {
+                    "fieldName": "check_id",
+                    "displayName": "#"
+                  },
+                  {
+                    "fieldName": "check_name",
+                    "displayName": "Capability"
+                  },
+                  {
+                    "fieldName": "raw_value",
+                    "displayName": "Measured"
+                  },
+                  {
+                    "fieldName": "error",
+                    "displayName": "Not Measurable Because"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Unused Capabilities",
+                "showDescription": true,
+                "description": "Every check scoring NONE \u2014 the platform surface not being used. A non-empty last column means the check could not be measured at all, which is not the same as unused."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 21,
+            "width": 12,
+            "height": 9
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_checks_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_checks",
+                  "fields": [
+                    {
+                      "name": "section",
+                      "expression": "`section`"
+                    },
+                    {
+                      "name": "check_id",
+                      "expression": "`check_id`"
+                    },
+                    {
+                      "name": "check_name",
+                      "expression": "`check_name`"
+                    },
+                    {
+                      "name": "label",
+                      "expression": "`label`"
+                    },
+                    {
+                      "name": "raw_value",
+                      "expression": "`raw_value`"
+                    },
+                    {
+                      "name": "detail",
+                      "expression": "`detail`"
+                    },
+                    {
+                      "name": "measurable",
+                      "expression": "`measurable`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "section",
+                    "displayName": "Section"
+                  },
+                  {
+                    "fieldName": "check_id",
+                    "displayName": "#"
+                  },
+                  {
+                    "fieldName": "check_name",
+                    "displayName": "Capability"
+                  },
+                  {
+                    "fieldName": "label",
+                    "displayName": "Level"
+                  },
+                  {
+                    "fieldName": "raw_value",
+                    "displayName": "Measured"
+                  },
+                  {
+                    "fieldName": "detail",
+                    "displayName": "Detail"
+                  },
+                  {
+                    "fieldName": "measurable",
+                    "displayName": "Status"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "All Checks",
+                "showDescription": true,
+                "description": "The full 51, with the value behind each score."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 30,
+            "width": 12,
+            "height": 11
+          }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}

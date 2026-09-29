@@ -1,4 +1,4 @@
-"""Job entry point: conformance assessment.
+"""Job entry point: adoption assessment.
 
 The code itself lives in the datavail_assessment wheel, which the job
 environment installs; this file only hands control to it. Keeping it to
@@ -10,7 +10,7 @@ Arguments come from the task's `parameters` list and are read by
 argparse from sys.argv, exactly as on the command line.
 """
 
-from datavail_assessment.conformance.run import main
+from datavail_assessment.adoption.run import main
 
 # Deliberately not `raise SystemExit(main())`. On serverless compute this
 # file is exec()d inside an IPython kernel where even SystemExit(0) is
