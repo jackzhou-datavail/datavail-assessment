@@ -22,6 +22,8 @@ labelled as such in the pattern's `reason`/detail so a reader does not
 mistake them for exact measurements.
 """
 
+from . import table_detail as td
+
 # Regexes used across checks to classify objects by naming convention.
 BRONZE_RX = r"(^|[._])(bronze|raw|landing|stg|staging)([._]|$)"
 GOLD_RX = r"(^|[._])(gold|mart|semantic|reporting|presentation)([._]|$)"
@@ -887,7 +889,23 @@ def check_system_schema_enablement(executor, params):
     return enabled, len(REQUIRED_SYSTEM_SCHEMAS), findings
 
 
+# Later waves live in their own module but register into CHECKS above,
+# so nothing downstream can tell where an entry was defined.
+from . import checks_extended as _extended  # noqa: E402
+
+_extended.register(check)
+
+
+# Tier TABLE_DETAIL: DESCRIBE DETAIL per table, sampled. Kept in its own
+# module because it is a scan pass, not a SQL definition like the rest of
+# this file.
 PY_CHECKS = {
     "observability-from-system-tables": ("system_schemas", check_system_schema_enablement),
     "lineage-and-audit-via-system-tables": ("system_schemas", check_system_schema_enablement),
+    "over-partitioning": ("tables", td.check_over_partitioning),
+    "liquid-clustering-over-partitioning": ("tables", td.check_liquid_clustering),
+    "small-file-accumulation": ("tables", td.check_small_files),
+    "deletion-vectors-for-fast-dml": ("tables", td.check_deletion_vectors),
+    "unmanaged-vacuum-retention": ("tables", td.check_vacuum_retention),
+    "data-retention-policies": ("tables", td.check_retention_policy),
 }
