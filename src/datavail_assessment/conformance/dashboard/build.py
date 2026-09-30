@@ -1,11 +1,12 @@
-"""Generate the Platform Onboarding Assessment AI/BI dashboard.
+"""Generate the Conformance Assessment AI/BI dashboard.
 
 Emits a Lakeview dashboard JSON reading from the assessment result
 tables.
 
     python -m datavail_assessment.conformance.dashboard.build --results-catalog assessment
 
-Writes dashboard.lvdash.json beside this file.
+Writes conformance_assessment.lvdash.json beside this file. The bundle
+deploys it as the "Conformance Assessment" dashboard.
 
 Scoring shown here is deliberately two-dimensional: every score is
 paired with the coverage it was computed from, and a category whose
@@ -21,7 +22,7 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Grade bands for the onboarding readiness score.
+# Grade bands for the conformance readiness score.
 GOOD, FAIR = 80, 60
 MIN_COVERAGE = 40  # below this, a category score is not trustworthy
 
@@ -44,7 +45,7 @@ def datasets(catalog: str, schema: str) -> list[dict]:
                 "queryLines": [l + "\n" for l in sql.strip().splitlines()]}
 
     return [
-        ds("ds_overall", "Overall Onboarding Score", f"""
+        ds("ds_overall", "Overall Conformance Score", f"""
 SELECT
   s.overall_score,
   s.coverage_pct,
@@ -59,7 +60,7 @@ SELECT
     WHEN s.overall_score >= {GOOD} THEN 'GOOD'
     WHEN s.overall_score >= {FAIR} THEN 'FAIR'
     ELSE 'POOR'
-  END AS onboarding_grade,
+  END AS conformance_grade,
   r.run_ts,
   r.lookback_days,
   r.registry_version
@@ -252,7 +253,7 @@ STATUS_COLORS = [{"value": "MEASURED", "color": GREEN},
 def build(catalog: str, schema: str) -> dict:
     page1 = [
         text("p1_title", [
-            "# Platform Onboarding Assessment",
+            "# Conformance Assessment",
             "",
             "How closely this workspace follows documented Databricks practice, measured from "
             "Unity Catalog system tables against the pattern library.",
@@ -261,11 +262,11 @@ def build(catalog: str, schema: str) -> dict:
             "contribute to a score. A category measured on thin evidence is graded "
             "*INSUFFICIENT DATA* rather than given a misleading number.",
         ], 0, 0, 6, 5),
-        counter("kpi_score", "ds_overall", "overall_score", "Onboarding Score",
+        counter("kpi_score", "ds_overall", "overall_score", "Conformance Score",
                 "Weighted mean conformance across measured checks (0-100)", 6, 0, 3, 5),
         counter("kpi_coverage", "ds_overall", "coverage_pct", "Measurement Coverage",
                 "Share of applicable weight that could be measured", 9, 0, 3, 5),
-        counter("kpi_grade", "ds_overall", "onboarding_grade", "Overall Implementation",
+        counter("kpi_grade", "ds_overall", "conformance_grade", "Overall Implementation",
                 f"GOOD >= {GOOD}, FAIR >= {FAIR}, else POOR", 0, 5, 3, 3),
         counter("kpi_critical", "ds_overall", "critical_gaps", "Critical Gaps",
                 "CRITICAL-severity checks graded POOR", 3, 5, 3, 3),
@@ -348,9 +349,9 @@ def build(catalog: str, schema: str) -> dict:
     return {
         "datasets": datasets(catalog, schema),
         "pages": [
-            {"name": "scorecard", "displayName": "Onboarding Scorecard", "layout": page1},
-            {"name": "findings", "displayName": "Findings", "layout": page2},
-            {"name": "coverage", "displayName": "Coverage & Blind Spots", "layout": page3},
+            {"name": "scorecard", "displayName": "Conformance: Scorecard", "layout": page1},
+            {"name": "findings", "displayName": "Conformance: Findings", "layout": page2},
+            {"name": "coverage", "displayName": "Conformance: Coverage & Blind Spots", "layout": page3},
         ],
         "uiSettings": {"theme": {"widgetHeaderAlignment": "LEFT"}},
     }
@@ -360,7 +361,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results-catalog", default=os.environ.get("ASSESSMENT_RESULTS_CATALOG", "assessment"))
     ap.add_argument("--results-schema", default=os.environ.get("ASSESSMENT_RESULTS_SCHEMA", "results"))
-    ap.add_argument("--out", default=os.path.join(HERE, "dashboard.lvdash.json"))
+    ap.add_argument("--out", default=os.path.join(HERE, "conformance_assessment.lvdash.json"))
     args = ap.parse_args()
 
     dash = build(args.results_catalog, args.results_schema)

@@ -88,12 +88,12 @@ MEASURED 28 · NOT_AVAILABLE 41 · NOT_APPLICABLE 9 · ERROR 0
 
 ---
 
-## 2. Page 1 — Onboarding Scorecard
+## 2. Page 1 — Conformance: Scorecard
 
 The executive page. Opens with a text block explaining the score/coverage
 pairing, then four KPIs, two bar charts and the category table.
 
-### 2.1 Onboarding Score (KPI)
+### 2.1 Conformance Score (KPI)
 
 **At a glance.** The headline number, 0–100. Weighted mean conformance
 across every check that produced a measurement.

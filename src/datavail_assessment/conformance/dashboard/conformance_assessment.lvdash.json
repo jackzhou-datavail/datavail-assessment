@@ -2,7 +2,7 @@
   "datasets": [
     {
       "name": "ds_overall",
-      "displayName": "Overall Onboarding Score",
+      "displayName": "Overall Conformance Score",
       "queryLines": [
         "SELECT\n",
         "  s.overall_score,\n",
@@ -18,7 +18,7 @@
         "    WHEN s.overall_score >= 80 THEN 'GOOD'\n",
         "    WHEN s.overall_score >= 60 THEN 'FAIR'\n",
         "    ELSE 'POOR'\n",
-        "  END AS onboarding_grade,\n",
+        "  END AS conformance_grade,\n",
         "  r.run_ts,\n",
         "  r.lookback_days,\n",
         "  r.registry_version\n",
@@ -161,14 +161,14 @@
   "pages": [
     {
       "name": "scorecard",
-      "displayName": "Onboarding Scorecard",
+      "displayName": "Conformance: Scorecard",
       "layout": [
         {
           "widget": {
             "name": "p1_title",
             "multilineTextboxSpec": {
               "lines": [
-                "# Platform Onboarding Assessment\n",
+                "# Conformance Assessment\n",
                 "\n",
                 "How closely this workspace follows documented Databricks practice, measured from Unity Catalog system tables against the pattern library.\n",
                 "\n",
@@ -207,12 +207,12 @@
               "encodings": {
                 "value": {
                   "fieldName": "overall_score",
-                  "displayName": "Onboarding Score"
+                  "displayName": "Conformance Score"
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Onboarding Score",
+                "title": "Conformance Score",
                 "showDescription": true,
                 "description": "Weighted mean conformance across measured checks (0-100)"
               }
@@ -277,8 +277,8 @@
                   "datasetName": "ds_overall",
                   "fields": [
                     {
-                      "name": "onboarding_grade",
-                      "expression": "`onboarding_grade`"
+                      "name": "conformance_grade",
+                      "expression": "`conformance_grade`"
                     }
                   ],
                   "disaggregated": true
@@ -290,7 +290,7 @@
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "onboarding_grade",
+                  "fieldName": "conformance_grade",
                   "displayName": "Overall Implementation"
                 }
               },
@@ -673,7 +673,7 @@
     },
     {
       "name": "findings",
-      "displayName": "Findings",
+      "displayName": "Conformance: Findings",
       "layout": [
         {
           "widget": {
@@ -982,7 +982,7 @@
     },
     {
       "name": "coverage",
-      "displayName": "Coverage & Blind Spots",
+      "displayName": "Conformance: Coverage & Blind Spots",
       "layout": [
         {
           "widget": {
