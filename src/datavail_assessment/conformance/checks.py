@@ -893,7 +893,7 @@ def check_system_schema_enablement(executor, params):
 # so nothing downstream can tell where an entry was defined.
 from . import checks_extended as _extended  # noqa: E402
 
-_extended.register(check)
+_extended.register(check, BRONZE_RX, GOLD_RX, EMAIL_RX)
 
 
 # Tier TABLE_DETAIL: DESCRIBE DETAIL per table, sampled. Kept in its own

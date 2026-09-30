@@ -40,7 +40,7 @@ SENSITIVE_COL_RX = (
 LEGACY_SECURITY_MODES = "('NONE', 'LEGACY_PASSTHROUGH', 'LEGACY_TABLE_ACL', 'LEGACY_SINGLE_USER')"
 
 
-def register(check) -> None:
+def register(check, BRONZE_RX, GOLD_RX, EMAIL_RX) -> None:
     """Add this wave's checks to the shared CHECKS registry."""
 
     # ------------------------------------------------------------------
@@ -265,5 +265,374 @@ def register(check) -> None:
             FROM system.query.history
             WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
               AND compute.warehouse_id IS NOT NULL
+        """,
+    )
+
+    # ------------------------------------------------------------------
+    # Wave 3
+    # ------------------------------------------------------------------
+
+    check(
+        "tagging-strategy",
+        unit="relations",
+        requires={"system.information_schema.tables":
+                  ["table_catalog", "table_schema", "table_name"],
+                  "system.information_schema.table_tags":
+                  ["catalog_name", "schema_name", "table_name"]},
+        note=("Conforming = the relation carries a tag of its own, or inherits one "
+              "from a tagged schema or catalog. Tag coverage is the measurable half "
+              "of the pattern; near-duplicate tag KEYS need the Tag Policies API."),
+        measure="""
+            SELECT
+              COUNT_IF(tt.table_name IS NOT NULL
+                       OR st.schema_name IS NOT NULL
+                       OR ct.catalog_name IS NOT NULL) AS numerator,
+              COUNT(*) AS denominator
+            FROM system.information_schema.tables t
+            LEFT JOIN (SELECT DISTINCT catalog_name, schema_name, table_name
+                       FROM system.information_schema.table_tags) tt
+              ON  tt.catalog_name = t.table_catalog AND tt.schema_name = t.table_schema
+              AND tt.table_name = t.table_name
+            LEFT JOIN (SELECT DISTINCT catalog_name, schema_name
+                       FROM system.information_schema.schema_tags) st
+              ON  st.catalog_name = t.table_catalog AND st.schema_name = t.table_schema
+            LEFT JOIN (SELECT DISTINCT catalog_name
+                       FROM system.information_schema.catalog_tags) ct
+              ON  ct.catalog_name = t.table_catalog
+            WHERE t.table_catalog NOT IN ({excluded})
+              AND t.table_schema <> 'information_schema'
+        """,
+        findings="""
+            SELECT 'TABLE' AS object_type,
+                   CONCAT_WS('.', t.table_catalog, t.table_schema, t.table_name) AS object_id,
+                   CONCAT_WS('.', t.table_catalog, t.table_schema, t.table_name) AS object_name,
+                   t.table_owner AS owner,
+                   'untagged' AS metric_name, 1.0 AS metric_value
+            FROM system.information_schema.tables t
+            LEFT JOIN (SELECT DISTINCT catalog_name, schema_name, table_name
+                       FROM system.information_schema.table_tags) tt
+              ON  tt.catalog_name = t.table_catalog AND tt.schema_name = t.table_schema
+              AND tt.table_name = t.table_name
+            LEFT JOIN (SELECT DISTINCT catalog_name, schema_name
+                       FROM system.information_schema.schema_tags) st
+              ON  st.catalog_name = t.table_catalog AND st.schema_name = t.table_schema
+            LEFT JOIN (SELECT DISTINCT catalog_name
+                       FROM system.information_schema.catalog_tags) ct
+              ON  ct.catalog_name = t.table_catalog
+            WHERE t.table_catalog NOT IN ({excluded})
+              AND t.table_schema <> 'information_schema'
+              AND tt.table_name IS NULL AND st.schema_name IS NULL AND ct.catalog_name IS NULL
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "materialized-views-for-serving-layers",
+        unit="gold relations",
+        requires={"system.information_schema.tables":
+                  ["table_catalog", "table_schema", "table_name", "table_type"]},
+        note=("Scope is gold-layer relations, identified by schema or table naming - "
+              "a heuristic. Conforming = anything but a plain VIEW: a materialized "
+              "view, streaming table or managed table can serve a dashboard without "
+              "recomputing the whole query on every load."),
+        measure=f"""
+            SELECT
+              COUNT_IF(table_type <> 'VIEW') AS numerator,
+              COUNT(*) AS denominator
+            FROM system.information_schema.tables
+            WHERE table_catalog NOT IN ({{excluded}})
+              AND table_schema <> 'information_schema'
+              AND (lower(table_schema) RLIKE '{GOLD_RX}' OR lower(table_name) RLIKE '{GOLD_RX}')
+        """,
+        findings=f"""
+            SELECT 'VIEW' AS object_type,
+                   CONCAT_WS('.', table_catalog, table_schema, table_name) AS object_id,
+                   CONCAT_WS('.', table_catalog, table_schema, table_name) AS object_name,
+                   table_owner AS owner,
+                   'plain_view_in_gold' AS metric_name, 1.0 AS metric_value
+            FROM system.information_schema.tables
+            WHERE table_catalog NOT IN ({{excluded}})
+              AND table_schema <> 'information_schema'
+              AND (lower(table_schema) RLIKE '{GOLD_RX}' OR lower(table_name) RLIKE '{GOLD_RX}')
+              AND table_type = 'VIEW'
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "third-party-bi-tool-integration",
+        unit="BI tool queries",
+        requires={"system.query.history":
+                  ["start_time", "client_application", "executed_by"]},
+        note=("Scope is queries from non-Databricks client applications. Conforming = "
+              "run as a service principal rather than a personal account, which is "
+              "the shared-credential failure the pattern warns about: a whole BI tool "
+              "behind one human's identity loses per-user attribution and breaks when "
+              "that person leaves."),
+        measure=f"""
+            SELECT
+              COUNT_IF(executed_by IS NOT NULL AND NOT executed_by RLIKE '{EMAIL_RX}') AS numerator,
+              COUNT(*) AS denominator
+            FROM system.query.history
+            WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {{lookback}} DAYS
+              AND client_application IS NOT NULL
+              AND client_application NOT LIKE 'Databricks%'
+              AND client_application NOT IN ('unknown', '', 'SPARK_CONNECT', 'JobRun', 'DatabricksGenie')
+        """,
+    )
+
+    check(
+        "data-copies-instead-of-sharing",
+        unit="write statements",
+        requires={"system.query.history": ["start_time", "statement_text", "statement_type"]},
+        note=("Conforming = a write that stays inside the lakehouse. Exporting to an "
+              "external path or directory is the copy the pattern argues against, "
+              "since a copy is stale the moment it lands and carries no grants."),
+        measure="""
+            SELECT
+              COUNT_IF(NOT lower(statement_text) RLIKE
+                       '(insert +overwrite +directory|copy +into +[^ ]*(s3|abfss|gs|wasbs)://|location +.(s3|abfss|gs|wasbs)://)') AS numerator,
+              COUNT(*) AS denominator
+            FROM system.query.history
+            WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+              AND statement_text IS NOT NULL
+              AND statement_type IN ('INSERT', 'CREATE', 'REPLACE', 'MERGE', 'UPDATE')
+        """,
+        findings="""
+            SELECT 'QUERY' AS object_type, statement_id AS object_id,
+                   SUBSTRING(statement_text, 1, 200) AS object_name,
+                   executed_by AS owner,
+                   'external_copy' AS metric_name, 1.0 AS metric_value
+            FROM system.query.history
+            WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+              AND statement_text IS NOT NULL
+              AND statement_type IN ('INSERT', 'CREATE', 'REPLACE', 'MERGE', 'UPDATE')
+              AND lower(statement_text) RLIKE
+                  '(insert +overwrite +directory|copy +into +[^ ]*(s3|abfss|gs|wasbs)://|location +.(s3|abfss|gs|wasbs)://)'
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "compute-right-sizing",
+        unit="clusters",
+        requires={"system.compute.node_timeline":
+                  ["cluster_id", "start_time", "cpu_user_percent"]},
+        note=("Conforming = average CPU utilisation at or above 20% over the window. "
+              "Below that the cluster is paying for cores it never uses. Needs "
+              "node_timeline, which only has rows for classic compute - a "
+              "serverless-only workspace has nothing to size."),
+        measure="""
+            WITH per_cluster AS (
+              SELECT cluster_id, AVG(cpu_user_percent) AS avg_cpu
+              FROM system.compute.node_timeline
+              WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+              GROUP BY cluster_id
+            )
+            SELECT COUNT_IF(avg_cpu >= 20.0) AS numerator, COUNT(*) AS denominator
+            FROM per_cluster
+        """,
+        findings="""
+            WITH per_cluster AS (
+              SELECT cluster_id, AVG(cpu_user_percent) AS avg_cpu
+              FROM system.compute.node_timeline
+              WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+              GROUP BY cluster_id
+            )
+            SELECT 'CLUSTER' AS object_type, cluster_id AS object_id,
+                   cluster_id AS object_name, NULL AS owner,
+                   'avg_cpu_user_percent' AS metric_name, avg_cpu AS metric_value
+            FROM per_cluster WHERE avg_cpu < 20.0
+            LIMIT 500
+        """,
+    )
+
+    # ------------------------------------------------------------------
+    # Wave 4
+    # ------------------------------------------------------------------
+
+    check(
+        "deploy-code-not-models",
+        unit="MLflow runs",
+        requires={"system.mlflow.runs_latest": ["run_id", "created_by", "start_time"]},
+        note=("Conforming = the training run was created by an automation principal, "
+              "not a person. A model whose runs all originate from an individual was "
+              "trained by hand somewhere and carried forward, which is the artifact "
+              "promotion the pattern argues against."),
+        measure=f"""
+            SELECT
+              COUNT_IF(created_by IS NOT NULL AND NOT created_by RLIKE '{EMAIL_RX}') AS numerator,
+              COUNT(*) AS denominator
+            FROM system.mlflow.runs_latest
+            WHERE delete_time IS NULL
+              AND start_time >= CURRENT_TIMESTAMP() - INTERVAL {{lookback}} DAYS
+        """,
+        findings=f"""
+            SELECT 'MLFLOW_RUN' AS object_type, run_id AS object_id,
+                   COALESCE(run_name, run_id) AS object_name, created_by AS owner,
+                   'personal_training_run' AS metric_name, 1.0 AS metric_value
+            FROM system.mlflow.runs_latest
+            WHERE delete_time IS NULL
+              AND start_time >= CURRENT_TIMESTAMP() - INTERVAL {{lookback}} DAYS
+              AND (created_by IS NULL OR created_by RLIKE '{EMAIL_RX}')
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "cicd-for-ml-pipelines",
+        unit="ML jobs",
+        requires={"system.lakeflow.jobs":
+                  ["job_id", "name", "deployment", "run_as_user_name", "delete_time"]},
+        note=("Scope is jobs whose name suggests training, inference or feature work "
+              "- a heuristic. Conforming = deployed from a bundle rather than created "
+              "by hand in the UI, which is the reconciliation the pattern asks for."),
+        measure="""
+            WITH latest AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS name,
+                     MAX_BY(deployment, change_time) AS deployment,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.jobs
+              GROUP BY job_id
+            )
+            SELECT COUNT_IF(deployment IS NOT NULL) AS numerator, COUNT(*) AS denominator
+            FROM latest
+            WHERE delete_time IS NULL
+              AND lower(name) RLIKE '(train|model|ml[_ -]|inference|feature|mlflow|predict)'
+        """,
+    )
+
+    check(
+        "genai-evaluation-and-human-feedback",
+        unit="experiments",
+        requires={"system.mlflow.experiments_latest": ["experiment_id", "name"],
+                  "system.mlflow.runs_latest": ["experiment_id", "start_time"]},
+        note=("Conforming = the experiment has at least one run inside the window. "
+              "An experiment serving production traffic with no recent runs has no "
+              "live evaluation behind it, which is the finding the pattern names."),
+        measure="""
+            WITH ex AS (
+              SELECT experiment_id, name FROM system.mlflow.experiments_latest
+              WHERE delete_time IS NULL
+            ),
+            recent AS (
+              SELECT DISTINCT experiment_id FROM system.mlflow.runs_latest
+              WHERE delete_time IS NULL
+                AND start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+            )
+            SELECT COUNT(r.experiment_id) AS numerator, COUNT(*) AS denominator
+            FROM ex LEFT JOIN recent r ON r.experiment_id = ex.experiment_id
+        """,
+        findings="""
+            WITH ex AS (
+              SELECT experiment_id, name FROM system.mlflow.experiments_latest
+              WHERE delete_time IS NULL
+            ),
+            recent AS (
+              SELECT DISTINCT experiment_id FROM system.mlflow.runs_latest
+              WHERE delete_time IS NULL
+                AND start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+            )
+            SELECT 'EXPERIMENT' AS object_type, ex.experiment_id AS object_id,
+                   ex.name AS object_name, NULL AS owner,
+                   'no_recent_runs' AS metric_name, 1.0 AS metric_value
+            FROM ex LEFT JOIN recent r ON r.experiment_id = ex.experiment_id
+            WHERE r.experiment_id IS NULL
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "genai-readiness-foundations",
+        unit="GenAI capabilities",
+        requires={"system.billing.usage": ["usage_date", "billing_origin_product"]},
+        note=("Readiness measured as breadth: how many of the GenAI building blocks "
+              "show any billed usage in the window. Deliberately a capability count "
+              "rather than a quality measure - the pattern is about having the "
+              "foundations at all."),
+        measure="""
+            WITH expected AS (
+              SELECT explode(array('MODEL_SERVING', 'VECTOR_SEARCH', 'AI_GATEWAY',
+                                   'GENIE', 'APPS', 'AGENT_BRICKS')) AS product
+            ),
+            seen AS (
+              SELECT DISTINCT billing_origin_product AS product
+              FROM system.billing.usage
+              WHERE usage_date >= CURRENT_DATE() - INTERVAL {lookback} DAYS
+            )
+            SELECT COUNT(s.product) AS numerator, COUNT(*) AS denominator
+            FROM expected e LEFT JOIN seen s ON s.product = e.product
+        """,
+    )
+
+    check(
+        "security-analysis-tool-baseline",
+        unit="SAT installation",
+        requires={"system.lakeflow.jobs": ["job_id", "name"],
+                  "system.information_schema.schemata": ["catalog_name", "schema_name"]},
+        note=("Binary: is the Security Analysis Tool installed at all. Detected by a "
+              "SAT job or a SAT output schema. If it is not installed, running it is "
+              "itself the pattern's recommendation, so there is nothing partial to "
+              "measure."),
+        measure="""
+            WITH found AS (
+              SELECT 1 AS hit FROM system.lakeflow.jobs
+              WHERE delete_time IS NULL
+                AND lower(name) RLIKE '(security[_ -]analysis[_ -]tool|\\\\bsat\\\\b[_ -]|security_analysis)'
+              UNION ALL
+              SELECT 1 FROM system.information_schema.schemata
+              WHERE lower(schema_name) RLIKE '(security_analysis|^sat$|sat_)'
+            )
+            SELECT LEAST(COUNT(*), 1) AS numerator, 1 AS denominator FROM found
+        """,
+    )
+
+    check(
+        "separate-ingestion-and-transformation-pipelines",
+        unit="pipelines",
+        requires={"system.access.table_lineage":
+                  ["entity_type", "entity_id", "target_table_schema", "event_time"]},
+        note=("Conforming = a pipeline whose write targets do not span bronze AND "
+              "gold. One pipeline writing to both is doing ingestion and "
+              "transformation at once, which is the coupling the pattern warns "
+              "about. Layers identified by schema or table naming - a heuristic."),
+        measure=f"""
+            WITH writes AS (
+              SELECT entity_id,
+                     MAX(CASE WHEN lower(target_table_schema) RLIKE '{BRONZE_RX}'
+                               OR lower(target_table_name) RLIKE '{BRONZE_RX}' THEN 1 ELSE 0 END) AS hits_bronze,
+                     MAX(CASE WHEN lower(target_table_schema) RLIKE '{GOLD_RX}'
+                               OR lower(target_table_name) RLIKE '{GOLD_RX}' THEN 1 ELSE 0 END) AS hits_gold
+              FROM system.access.table_lineage
+              WHERE entity_type = 'PIPELINE'
+                AND entity_id IS NOT NULL
+                AND target_table_full_name IS NOT NULL
+                AND event_time >= CURRENT_TIMESTAMP() - INTERVAL {{lookback}} DAYS
+              GROUP BY entity_id
+            )
+            SELECT COUNT_IF(NOT (hits_bronze = 1 AND hits_gold = 1)) AS numerator,
+                   COUNT(*) AS denominator
+            FROM writes
+        """,
+        findings=f"""
+            WITH writes AS (
+              SELECT entity_id,
+                     MAX(CASE WHEN lower(target_table_schema) RLIKE '{BRONZE_RX}'
+                               OR lower(target_table_name) RLIKE '{BRONZE_RX}' THEN 1 ELSE 0 END) AS hits_bronze,
+                     MAX(CASE WHEN lower(target_table_schema) RLIKE '{GOLD_RX}'
+                               OR lower(target_table_name) RLIKE '{GOLD_RX}' THEN 1 ELSE 0 END) AS hits_gold
+              FROM system.access.table_lineage
+              WHERE entity_type = 'PIPELINE'
+                AND entity_id IS NOT NULL
+                AND target_table_full_name IS NOT NULL
+                AND event_time >= CURRENT_TIMESTAMP() - INTERVAL {{lookback}} DAYS
+              GROUP BY entity_id
+            )
+            SELECT 'PIPELINE' AS object_type, entity_id AS object_id,
+                   entity_id AS object_name, NULL AS owner,
+                   'writes_bronze_and_gold' AS metric_name, 1.0 AS metric_value
+            FROM writes WHERE hits_bronze = 1 AND hits_gold = 1
+            LIMIT 500
         """,
     )
