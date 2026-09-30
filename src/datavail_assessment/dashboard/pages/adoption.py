@@ -105,7 +105,7 @@ def layout() -> list[dict]:
             "# Adoption",
             "",
             "Which parts of the Databricks platform this workspace actually uses. "
-            "Each of 51 checks scores **ACTIVE** (in real use), **MINIMAL** (present, "
+            "Each check scores **ACTIVE** (in real use), **MINIMAL** (present, "
             "barely used) or **NONE** (no evidence).",
             "",
             "This is breadth, not quality. A workspace can use a capability heavily and "
@@ -132,7 +132,7 @@ def layout() -> list[dict]:
             0, 8, 7, 7, colorf="grade", mappings=ADOPTION_SECTION_COLORS),
         pie("adopt_mix_pie", "adopt_label_mix", "label", "n_checks",
             ADOPTION_LABEL_COLORS, "Check Mix",
-            "How the 51 checks resolved across every section.", 7, 8, 5, 7),
+            "How every check resolved across all six sections.", 7, 8, 5, 7),
 
         table("adopt_section_table", "adopt_sections",
               [("section", "Section"), ("grade", "Grade"), ("score_pct", "Score %"),
@@ -159,6 +159,6 @@ def layout() -> list[dict]:
                ("label", "Level"), ("raw_value", "Measured"), ("detail", "Detail"),
                ("measurable", "Status")],
               "All Checks",
-              "The full 51, with the value behind each score.",
+              "Every check, with the value behind each score.",
               0, 30, 12, 11),
     ]

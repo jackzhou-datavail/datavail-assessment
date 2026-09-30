@@ -75,11 +75,21 @@ def ensure_columns(executor, fqn: str, wanted: dict[str, str]) -> None:
         print(f"  added missing column {fqn}.{col}")
 
 
-def scalar(executor, sql: str, params: dict):
-    """First column of the first row, or an error string."""
+MISSING_OBJECT = ("TABLE_OR_VIEW_NOT_FOUND", "SCHEMA_NOT_FOUND")
+
+
+def scalar(executor, sql: str, params: dict, absent_means_zero: bool = False):
+    """First column of the first row, or an error string.
+
+    With `absent_means_zero`, a missing table or schema resolves to 0
+    rather than an error - see `checks.check` for why that is the right
+    reading for a feature-gated system table.
+    """
     try:
         rows = executor.query(sql.format(**params))
     except Exception as exc:  # noqa: BLE001 - reported per check, never fatal
+        if absent_means_zero and any(m in str(exc) for m in MISSING_OBJECT):
+            return 0.0, None
         return None, f"{type(exc).__name__}: {exc}"[:400]
     if not rows:
         return 0.0, None
@@ -118,7 +128,89 @@ def sample_delta_history(executor, params: dict) -> dict:
     return {"sampled": sampled, "multi_version": multi}
 
 
-SAMPLERS = {"delta_history": sample_delta_history}
+def sample_clustering(executor, params: dict) -> dict:
+    """How many sampled tables declare clustering columns.
+
+    Clustering is a table property, not a system-table column, so this
+    is DESCRIBE DETAIL per table - sampled for the same reason as the
+    Delta history check.
+    """
+    rows = executor.query(f"""
+        SELECT CONCAT_WS('.', table_catalog, table_schema, table_name) AS fq
+        FROM system.information_schema.tables
+        WHERE table_type = 'MANAGED'
+          AND table_schema != 'information_schema'
+          AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+        LIMIT {SAMPLE_SIZE}
+    """)
+    sampled = clustered = 0
+    for r in rows:
+        try:
+            detail = executor.query(f"DESCRIBE DETAIL {r['fq']}")
+        except Exception:  # noqa: BLE001
+            continue
+        sampled += 1
+        cols = (detail[0].get("clusteringColumns") if detail else None) or ""
+        if cols not in ("", "[]", "null", None):
+            clustered += 1
+    return {"sampled": sampled, "clustered": clustered}
+
+
+def sample_sharing_inventory(executor, params: dict) -> dict:
+    """Delta Sharing inventory: what we publish and what we consume.
+
+    SHOW SHARES / RECIPIENTS / PROVIDERS are the only listings for these;
+    there is no system table equivalent.
+    """
+    out = {"shares": 0, "recipients": 0, "providers": 0, "shared_catalogs": 0}
+    for key, stmt in (("shares", "SHOW SHARES"),
+                      ("recipients", "SHOW RECIPIENTS"),
+                      ("providers", "SHOW PROVIDERS")):
+        try:
+            out[key] = len(executor.query(stmt))
+        except Exception:  # noqa: BLE001 - absence is the measurement
+            pass
+    try:
+        rows = executor.query("SHOW CATALOGS")
+        for r in rows:
+            name = list(r.values())[0]
+            try:
+                d = executor.query(f"DESCRIBE CATALOG {name}")
+                blob = " ".join(str(v) for row in d for v in row.values()).upper()
+                if "DELTASHARING" in blob or "SHARE" in blob:
+                    out["shared_catalogs"] += 1
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def sample_abac_policies(executor, params: dict) -> dict:
+    """ABAC policies are per-securable, so walk the catalogs."""
+    policies = scanned = 0
+    try:
+        rows = executor.query("SHOW CATALOGS")
+    except Exception:  # noqa: BLE001
+        return {"policies": 0, "catalogs_scanned": 0}
+    for r in rows:
+        name = list(r.values())[0]
+        if name in ("system", "samples", "__databricks_internal"):
+            continue
+        try:
+            policies += len(executor.query(f"SHOW POLICIES ON CATALOG `{name}`"))
+            scanned += 1
+        except Exception:  # noqa: BLE001 - unsupported or no access
+            continue
+    return {"policies": policies, "catalogs_scanned": scanned}
+
+
+SAMPLERS = {
+    "delta_history": sample_delta_history,
+    "clustering": sample_clustering,
+    "sharing_inventory": sample_sharing_inventory,
+    "abac_policies": sample_abac_policies,
+}
 
 
 def run_checks(executor, params: dict) -> list[dict]:
@@ -126,7 +218,8 @@ def run_checks(executor, params: dict) -> list[dict]:
     out = []
 
     for cid, c in checks_mod.CHECKS.items():
-        value, err = scalar(executor, c["sql"], params)
+        value, err = scalar(executor, c["sql"], params,
+                            c.get("absent_means_zero", False))
         if err:
             out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                         "raw_value": None, "score": 0, "label": "NONE",

@@ -146,7 +146,7 @@
               "lines": [
                 "# Adoption\n",
                 "\n",
-                "Which parts of the Databricks platform this workspace actually uses. Each of 51 checks scores **ACTIVE** (in real use), **MINIMAL** (present, barely used) or **NONE** (no evidence).\n",
+                "Which parts of the Databricks platform this workspace actually uses. Each check scores **ACTIVE** (in real use), **MINIMAL** (present, barely used) or **NONE** (no evidence).\n",
                 "\n",
                 "This is breadth, not quality. A workspace can use a capability heavily and use it badly \u2014 that is a different question, and a different page.\n"
               ]
@@ -553,7 +553,7 @@
                 "showTitle": true,
                 "title": "Check Mix",
                 "showDescription": true,
-                "description": "How the 51 checks resolved across every section."
+                "description": "How every check resolved across all six sections."
               }
             }
           },
@@ -845,7 +845,7 @@
                 "showTitle": true,
                 "title": "All Checks",
                 "showDescription": true,
-                "description": "The full 51, with the value behind each score."
+                "description": "Every check, with the value behind each score."
               }
             }
           },

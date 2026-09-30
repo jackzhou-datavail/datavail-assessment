@@ -21,20 +21,35 @@ sub-queries. See COMPOUND_CHECKS.
 
 from __future__ import annotations
 
+# Weights are each area's share of the overall score. `max` is no longer
+# used - the denominator is computed from the checks that could actually
+# be measured, so a section is scored out of what was looked at.
 SECTIONS = {
-    "Workspace": {"max": 20, "weight": 0.30},
-    "SQL": {"max": 24, "weight": 0.20},
-    "Data Engineering": {"max": 28, "weight": 0.30},
-    "AI/ML": {"max": 30, "weight": 0.20},
+    "Workspace": {"weight": 0.22},
+    "SQL": {"weight": 0.18},
+    "Data Engineering": {"weight": 0.22},
+    "AI/ML": {"weight": 0.18},
+    "Governance & Security": {"weight": 0.12},
+    "Data Sharing": {"weight": 0.08},
 }
 
 # id -> section, name, sql, minimal, active
 CHECKS: dict[str, dict] = {}
 
 
-def check(cid, section, name, sql, minimal, active, pct=False):
+def check(cid, section, name, sql, minimal, active, pct=False,
+          absent_means_zero=False):
+    """`absent_means_zero` for feature-gated system tables.
+
+    Some system schemas only appear once the feature behind them is
+    used - system.data_quality_monitoring is the clearest case. For an
+    adoption question the absence IS the answer: nothing to monitor with
+    means monitoring is not adopted. Without this the check would report
+    a query error and look like a tooling gap rather than a finding.
+    """
     CHECKS[cid] = {"section": section, "name": name, "sql": sql.strip(),
-                   "minimal": minimal, "active": active, "pct": pct}
+                   "minimal": minimal, "active": active, "pct": pct,
+                   "absent_means_zero": absent_means_zero}
 
 
 # Capabilities the checklist specifies but system tables cannot see.
@@ -715,31 +730,398 @@ compound(
     sampler="delta_history",
 )
 
-not_measurable(
-    "2.12", "SQL", "Parameterized queries / filters in dashboards",
-    "Dashboard datasets and their parameters live in the Lakeview API "
-    "(GET /api/2.0/lakeview/dashboards), not in system tables. Dashboard "
-    "edit events in system.access.audit show a dashboard changed, not "
-    "whether it takes parameters.",
+
+# ---------------------------------------------------------------------
+# Checks added from the pattern library review (2026-09-29)
+#
+# Every one measures what adoption_checks.md specifies. Where the
+# checklist named an API alongside a system table, the system-table half
+# is measured and the check name says what it counts, so nobody reads
+# more into the number than it carries.
+# ---------------------------------------------------------------------
+
+# --- Workspace -------------------------------------------------------
+
+check(
+    "1.11", "Workspace", "Billable products in use (breadth)",
+    """
+    SELECT COUNT(DISTINCT billing_origin_product)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 90 DAYS
+    """,
+    minimal=3.0, active=8.0,
 )
 
-not_measurable(
-    "3.11", "Data Engineering", "Task types used (notebook, Python, SQL, JAR, pipeline)",
-    "system.lakeflow.job_tasks carries job_id, task_key, depends_on_keys, "
-    "timeout_seconds and health_rules - there is no task_type column. "
-    "Task types come from the Jobs API (GET /api/2.2/jobs/get).",
+check(
+    "1.12", "Workspace", "Serverless share of compute DBUs (%)",
+    """
+    SELECT COALESCE(ROUND(100.0 * SUM(CASE WHEN upper(sku_name) LIKE '%SERVERLESS%'
+                                           THEN usage_quantity ELSE 0 END)
+                          / NULLIF(SUM(usage_quantity), 0), 1), 0)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 30 DAYS
+    """,
+    minimal=10.0, active=50.0, pct=True,
 )
 
-not_measurable(
-    "4.12", "AI/ML", "Agent Bricks tiles defined",
-    "Tile inventory is not exposed in system tables. Audit events name "
-    "actions taken, which is activity rather than the configured tiles "
-    "the checklist asks to count.",
+check(
+    "1.13", "Workspace", "Workspaces with active usage",
+    """
+    SELECT COUNT(DISTINCT workspace_id)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 30 DAYS
+    """,
+    minimal=1.0, active=2.0,
 )
 
-not_measurable(
-    "4.13", "AI/ML", "Inference tables logging enabled",
-    "system.serving.served_entities describes what each endpoint serves, "
-    "not its logging configuration - there is no inference-table column. "
-    "The setting comes from the Serving endpoints API.",
+check(
+    "1.14", "Workspace", "Bundle-deployed jobs and pipelines",
+    """
+    SELECT COUNT(*) FROM (
+      SELECT job_id FROM (
+        SELECT job_id, name,
+               ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY change_time DESC) rn
+        FROM system.lakeflow.jobs
+      ) x WHERE rn = 1 AND name RLIKE '^\\[[a-zA-Z0-9_ -]+\\]'
+    )
+    """,
+    minimal=1.0, active=3.0,
+)
+
+check(
+    "1.15", "Workspace", "System tables queried (statements referencing system.)",
+    """
+    SELECT COUNT(*)
+      FROM system.query.history
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAYS
+        AND lower(statement_text) LIKE '%system.%'
+    """,
+    minimal=1.0, active=50.0,
+)
+
+check(
+    "1.16", "Workspace", "Cost-attribution tags on usage (%)",
+    """
+    SELECT COALESCE(ROUND(100.0 * SUM(CASE WHEN custom_tags IS NOT NULL
+                                             AND size(map_keys(custom_tags)) > 0
+                                           THEN usage_quantity ELSE 0 END)
+                          / NULLIF(SUM(usage_quantity), 0), 1), 0)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 30 DAYS
+    """,
+    minimal=10.0, active=60.0, pct=True,
+)
+
+check(
+    "1.17", "Workspace", "Databricks Apps deployed (DBUs)",
+    """
+    SELECT COALESCE(SUM(usage_quantity), 0)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 90 DAYS
+        AND upper(billing_origin_product) = 'APPS'
+    """,
+    minimal=0.01, active=1.0,
+)
+
+# --- SQL -------------------------------------------------------------
+
+check(
+    "2.13", "SQL", "Genie usage volume (30d)",
+    """
+    SELECT COUNT(*)
+      FROM system.query.history
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAYS
+        AND query_source.genie_space_id IS NOT NULL
+    """,
+    minimal=1.0, active=50.0,
+)
+
+check(
+    "2.14", "SQL", "Dashboard-driven query volume (30d)",
+    """
+    SELECT COUNT(*)
+      FROM system.query.history
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAYS
+        AND query_source.dashboard_id IS NOT NULL
+    """,
+    minimal=1.0, active=100.0,
+)
+
+check(
+    "2.15", "SQL", "Metric views defined",
+    """
+    SELECT COUNT(*)
+      FROM system.information_schema.tables
+      WHERE upper(table_type) LIKE '%METRIC%'
+        AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+    """,
+    minimal=1.0, active=3.0,
+)
+
+check(
+    "2.16", "SQL", "External BI / client tools connected (30d)",
+    """
+    SELECT COUNT(DISTINCT client_application)
+      FROM system.query.history
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 30 DAYS
+        AND client_application IS NOT NULL
+        AND lower(client_application) NOT RLIKE
+            '(databricks|notebook|sql editor|dashboard|genie|unknown)'
+    """,
+    minimal=1.0, active=2.0,
+)
+
+check(
+    "2.17", "SQL", "Cost-per-query attribution in place",
+    """
+    SELECT COUNT(*)
+      FROM system.information_schema.tables
+      WHERE table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+        AND (lower(table_name) LIKE '%cost_per_query%'
+             OR lower(table_name) LIKE '%query_cost%')
+    """,
+    minimal=1.0, active=1.0,
+)
+
+# --- Data Engineering ------------------------------------------------
+
+check(
+    "3.15", "Data Engineering", "Declared data quality rules (table constraints)",
+    """
+    SELECT COUNT(*)
+      FROM system.information_schema.table_constraints
+      WHERE constraint_type IN ('CHECK', 'PRIMARY KEY', 'FOREIGN KEY')
+        AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+    """,
+    minimal=1.0, active=10.0,
+)
+
+check(
+    "3.16", "Data Engineering", "Data quality monitoring enabled",
+    """
+    SELECT COUNT(DISTINCT table_name)
+      FROM system.data_quality_monitoring.table_results
+    """,
+    minimal=1.0, active=3.0, absent_means_zero=True,
+)
+
+check(
+    "3.18", "Data Engineering", "Predictive optimization active",
+    """
+    SELECT COUNT(DISTINCT CONCAT_WS('.', catalog_name, schema_name, table_name))
+      FROM system.storage.predictive_optimization_operations_history
+    """,
+    minimal=1.0, active=10.0,
+)
+
+# --- AI/ML -----------------------------------------------------------
+
+check(
+    "4.16", "AI/ML", "GenAI tracing and evaluation activity (90d)",
+    """
+    SELECT COUNT(*)
+      FROM system.mlflow.runs_latest
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 90 DAYS
+        AND (lower(COALESCE(run_name, '')) RLIKE '(eval|trace|judge|genai)'
+             OR array_contains(map_keys(COALESCE(tags, map())), 'mlflow.genai.evaluation'))
+    """,
+    minimal=1.0, active=5.0,
+)
+
+# --- Governance & Security -------------------------------------------
+
+check(
+    "5.2", "Governance & Security", "Tags applied to data objects",
+    """
+    SELECT (SELECT COUNT(*) FROM system.information_schema.catalog_tags)
+         + (SELECT COUNT(*) FROM system.information_schema.schema_tags)
+         + (SELECT COUNT(*) FROM system.information_schema.table_tags)
+         + (SELECT COUNT(*) FROM system.information_schema.column_tags)
+    """,
+    minimal=1.0, active=10.0,
+)
+
+check(
+    "5.3", "Governance & Security", "Data classification tags on columns",
+    """
+    SELECT COUNT(*)
+      FROM system.information_schema.column_tags
+      WHERE lower(tag_name) RLIKE '(class|sensitiv|pii|confidential|gdpr)'
+    """,
+    minimal=1.0, active=5.0,
+)
+
+check(
+    "5.4", "Governance & Security", "Row filters and column masks",
+    """
+    SELECT (SELECT COUNT(*) FROM system.information_schema.row_filters)
+         + (SELECT COUNT(*) FROM system.information_schema.column_masks)
+    """,
+    minimal=1.0, active=3.0,
+)
+
+check(
+    "5.6", "Governance & Security", "Service principals running workloads (%)",
+    """
+    WITH w AS (
+      SELECT run_as FROM (
+        SELECT run_as, ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY change_time DESC) rn
+        FROM system.lakeflow.jobs
+      ) x WHERE rn = 1
+      UNION ALL
+      SELECT run_as FROM (
+        SELECT run_as, ROW_NUMBER() OVER (PARTITION BY pipeline_id ORDER BY change_time DESC) rn
+        FROM system.lakeflow.pipelines
+      ) y WHERE rn = 1
+    )
+    SELECT COALESCE(ROUND(100.0 * COUNT_IF(run_as IS NOT NULL
+             AND NOT run_as RLIKE '^[^@ ]+@[^@ ]+\\.[^@ ]+$') / NULLIF(COUNT(*), 0), 1), 0)
+      FROM w
+    """,
+    minimal=10.0, active=60.0, pct=True,
+)
+
+check(
+    "5.7", "Governance & Security", "Audit log actively queried (90d)",
+    """
+    SELECT COUNT(*)
+      FROM system.query.history
+      WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 90 DAYS
+        AND lower(statement_text) LIKE '%system.access.audit%'
+    """,
+    minimal=1.0, active=10.0,
+)
+
+check(
+    "5.8", "Governance & Security", "Security Analysis Tool running",
+    """
+    SELECT COUNT(DISTINCT job_id)
+      FROM system.lakeflow.jobs
+      WHERE delete_time IS NULL
+        AND (lower(name) LIKE '%security analysis%' OR lower(name) LIKE '%sat %'
+             OR lower(name) LIKE '%security_analysis%')
+    """,
+    minimal=1.0, active=1.0,
+)
+
+# --- Data Sharing ----------------------------------------------------
+
+check(
+    "6.2", "Data Sharing", "Delta Sharing activity (90d)",
+    """
+    SELECT COUNT(*)
+      FROM system.access.audit
+      WHERE event_date >= CURRENT_DATE() - INTERVAL 90 DAYS
+        AND action_name LIKE 'deltaSharing%'
+    """,
+    minimal=1.0, active=100.0,
+)
+
+check(
+    "6.4", "Data Sharing", "Clean rooms in use (DBUs, 90d)",
+    """
+    SELECT COALESCE(SUM(usage_quantity), 0)
+      FROM system.billing.usage
+      WHERE usage_date >= CURRENT_DATE() - INTERVAL 90 DAYS
+        AND upper(billing_origin_product) LIKE '%CLEAN%'
+    """,
+    minimal=0.01, active=1.0,
+)
+
+
+# --- Compound and sampled additions ----------------------------------
+
+def _uc_vs_hive(v):
+    """5.1 - Unity Catalog adoption measured against remaining Hive use."""
+    uc, hive = v["uc_statements"], v["hive_statements"]
+    total = uc + hive
+    pct = (uc / total * 100) if total else 100.0
+    score = 2 if pct >= 95 else (1 if pct >= 50 else 0)
+    return round(pct, 1), score, f"{hive} statements still referencing hive_metastore"
+
+
+compound(
+    "5.1", "Governance & Security", "Unity Catalog adoption vs. Hive metastore",
+    {
+        "uc_statements": """
+            SELECT COUNT(*) FROM system.query.history
+            WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 90 DAYS
+              AND statement_text IS NOT NULL
+              AND NOT lower(statement_text) LIKE '%hive_metastore%'
+        """,
+        "hive_statements": """
+            SELECT COUNT(*) FROM system.query.history
+            WHERE start_time >= CURRENT_TIMESTAMP() - INTERVAL 90 DAYS
+              AND lower(statement_text) LIKE '%hive_metastore%'
+        """,
+    },
+    _uc_vs_hive,
+)
+
+
+def _shares_defined(v):
+    """6.1 - shares and recipients this workspace publishes."""
+    shares, recipients = v["shares"], v["recipients"]
+    score = 2 if (shares >= 1 and recipients >= 1) else (1 if shares >= 1 else 0)
+    return shares, score, f"{recipients} recipients"
+
+
+compound(
+    "6.1", "Data Sharing", "Shares and recipients defined (provider)",
+    {}, _shares_defined, sampler="sharing_inventory",
+)
+
+
+def _shared_consumed(v):
+    """6.3 - Delta Sharing catalogs mounted from other providers."""
+    providers, catalogs = v["providers"], v["shared_catalogs"]
+    score = 2 if catalogs >= 2 else (1 if (catalogs >= 1 or providers >= 1) else 0)
+    return catalogs, score, f"{providers} providers"
+
+
+compound(
+    "6.3", "Data Sharing", "Shared data consumed (recipient)",
+    {}, _shared_consumed, sampler="sharing_inventory",
+)
+
+
+def _liquid_clustering(v):
+    """3.17 - share of sampled tables declaring clustering columns."""
+    sampled, clustered, total = v["sampled"], v["clustered"], v["total_tables"]
+    if not sampled:
+        return 0.0, 0, "no managed tables to sample"
+    estimated = (clustered / sampled) * total
+    score = 2 if estimated > 10 else (1 if estimated >= 1 else 0)
+    return round(estimated, 1), score, f"{clustered}/{sampled} sampled, {total} tables total"
+
+
+compound(
+    "3.17", "Data Engineering", "Liquid clustering adopted",
+    {
+        "total_tables": """
+            SELECT COUNT(*) FROM system.information_schema.tables
+            WHERE table_type = 'MANAGED'
+              AND table_schema != 'information_schema'
+              AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+        """,
+    },
+    _liquid_clustering,
+    sampler="clustering",
+)
+
+
+def _abac_policies(v):
+    """5.5 - ABAC policies attached to catalogs or schemas.
+
+    SHOW POLICIES is per-securable, so the sampler walks catalogs rather
+    than relying on a system table, which does not expose them.
+    """
+    policies, scanned = v["policies"], v["catalogs_scanned"]
+    score = 2 if policies >= 3 else (1 if policies >= 1 else 0)
+    return policies, score, f"across {scanned} catalogs"
+
+
+compound(
+    "5.5", "Governance & Security", "ABAC policies defined",
+    {}, _abac_policies, sampler="abac_policies",
 )
