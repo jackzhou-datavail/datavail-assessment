@@ -49,7 +49,7 @@ COMMENT 'One row per assessment execution.';
 CREATE TABLE IF NOT EXISTS ${results_catalog}.${results_schema}.pattern_registry (
   run_id           STRING  COMMENT 'Run this snapshot belongs to',
   pattern_id       STRING  COMMENT 'Stable id; matches the markdown filename stem',
-  category         STRING  COMMENT 'Pattern category (directory name)',
+  category         STRING  COMMENT 'Reporting category, shared with the adoption assessment',
   title            STRING  COMMENT 'Human-readable pattern title',
   is_anti_pattern  BOOLEAN COMMENT 'TRUE when the document describes something to avoid',
   severity         STRING  COMMENT 'CRITICAL | HIGH | MEDIUM | LOW',
