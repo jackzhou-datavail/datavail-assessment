@@ -19,10 +19,13 @@ ADOPTION_SECTION_COLORS = [
     {"value": "DEVELOPING", "color": BLUE},
     {"value": "STRONG", "color": GREEN},
 ]
+# Keyed on the phrases the chart displays, not the raw ACTIVE/MINIMAL/NONE
+# stored in the table. A reader should not have to learn a vocabulary to
+# read a pie chart.
 ADOPTION_LABEL_COLORS = [
-    {"value": "NONE", "color": RED},
-    {"value": "MINIMAL", "color": AMBER},
-    {"value": "ACTIVE", "color": GREEN},
+    {"value": "Not used", "color": RED},
+    {"value": "Barely used", "color": AMBER},
+    {"value": "In real use", "color": GREEN},
 ]
 
 
@@ -45,12 +48,19 @@ def text(name: str, lines: list[str], x, y, w, h) -> dict:
 
 
 def counter(name, ds, field, title, desc, x, y, w=3, h=4) -> dict:
+    """`desc` may be empty - a tile whose title already says everything
+    reads better without a subtitle repeating it."""
+    frame = {"showTitle": True, "title": title}
+    if desc:
+        frame["showDescription"] = True
+        frame["description"] = desc
+    else:
+        frame["showDescription"] = False
     return {"widget": {"name": name, "queries": _query(ds, [field]),
                        "spec": {"version": 2, "widgetType": "counter",
                                 "encodings": {"value": {"fieldName": field,
                                                         "displayName": title}},
-                                "frame": {"showTitle": True, "title": title,
-                                          "showDescription": True, "description": desc}}},
+                                "frame": frame}},
             "position": {"x": x, "y": y, "width": w, "height": h}}
 
 

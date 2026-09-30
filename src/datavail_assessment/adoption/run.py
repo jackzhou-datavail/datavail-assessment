@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS {base}.adoption_check_history (
   label      STRING    COMMENT 'NONE | MINIMAL | ACTIVE',
   detail     STRING    COMMENT 'Supporting evidence, where a check has any',
   error      STRING    COMMENT 'Why a check could not be measured; NULL when it was',
-  measurable BOOLEAN   COMMENT 'FALSE when the capability cannot be observed from system tables at all'
+  measurable BOOLEAN   COMMENT 'FALSE when the capability cannot be observed from system tables at all',
+  value_display STRING COMMENT 'raw_value rendered with its unit - a percentage, or a thousands-separated count'
 )
 USING DELTA
 COMMENT 'Per-check adoption scores, one row per check per run.';
@@ -46,9 +47,9 @@ CREATE TABLE IF NOT EXISTS {base}.adoption_section_score (
   run_id        STRING    COMMENT 'Run this rollup belongs to',
   run_ts        TIMESTAMP COMMENT 'When the adoption check ran',
   section       STRING    COMMENT 'Section name, or OVERALL for the weighted total',
-  points        INT       COMMENT 'Points scored, two per ACTIVE check',
-  max_points    INT       COMMENT 'Points available in this section',
-  score_pct     DOUBLE    COMMENT 'points / max_points as a percentage',
+  points        INT       COMMENT 'Points scored, two per ACTIVE check. NULL on the OVERALL row, which is not derived from points',
+  max_points    INT       COMMENT 'Points available in this section. NULL on the OVERALL row',
+  score_pct     DOUBLE    COMMENT 'For a section, points / max_points. For OVERALL, the section percentages weighted by `weight`',
   grade         STRING    COMMENT 'NOT ADOPTED | EARLY | DEVELOPING | STRONG',
   active_count  INT       COMMENT 'Checks scoring 2',
   minimal_count INT       COMMENT 'Checks scoring 1',
@@ -213,6 +214,24 @@ SAMPLERS = {
 }
 
 
+def format_value(value, is_pct: bool) -> str:
+    """Render a measured value so the number carries its own unit.
+
+    raw_value is a DOUBLE holding whatever the check counted - people,
+    queries, DBUs, or a percentage. Shown bare they are indistinguishable:
+    "64.00" for 64 active users reads as a percentage, and a DBU figure
+    arrives with thirteen decimal places. The stored raw_value stays
+    untouched for trending and maths; this is the display form.
+    """
+    if value is None:
+        return ""
+    if is_pct:
+        return f"{value:.1f}%"
+    if abs(value - round(value)) < 0.05:
+        return f"{round(value):,}"
+    return f"{value:,.1f}"
+
+
 def run_checks(executor, params: dict) -> list[dict]:
     """Score all 51 checks. A failed query is recorded, not raised."""
     out = []
@@ -223,18 +242,21 @@ def run_checks(executor, params: dict) -> list[dict]:
         if err:
             out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                         "raw_value": None, "score": 0, "label": "NONE",
-                        "detail": None, "error": err, "measurable": True})
+                        "detail": None, "error": err, "measurable": True,
+                        "value_display": ""})
             continue
         score = scoring.score_thresholds(value, c["minimal"], c["active"])
         out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                     "raw_value": value, "score": score,
                     "label": scoring.LABELS[score], "detail": None,
-                    "error": None, "measurable": True})
+                    "error": None, "measurable": True,
+                    "value_display": format_value(value, c.get("pct", False))})
 
     for cid, c in checks_mod.NOT_MEASURABLE.items():
         out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                     "raw_value": None, "score": 0, "label": scoring.NOT_MEASURABLE,
-                    "detail": None, "error": c["reason"], "measurable": False})
+                    "detail": None, "error": c["reason"], "measurable": False,
+                    "value_display": ""})
 
     for cid, c in checks_mod.COMPOUND_CHECKS.items():
         vals, err = {}, None
@@ -247,7 +269,8 @@ def run_checks(executor, params: dict) -> list[dict]:
         if err:
             out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                         "raw_value": None, "score": 0, "label": "NONE",
-                        "detail": None, "error": err, "measurable": True})
+                        "detail": None, "error": err, "measurable": True,
+                        "value_display": ""})
             continue
         sampler = SAMPLERS.get(c.get("sampler"))
         if sampler:
@@ -258,13 +281,14 @@ def run_checks(executor, params: dict) -> list[dict]:
                             "check_name": c["name"], "raw_value": None, "score": 0,
                             "label": "NONE", "detail": None,
                             "error": f"{type(exc).__name__}: {exc}"[:400],
-                            "measurable": True})
+                            "measurable": True, "value_display": ""})
                 continue
         value, score, detail = c["combine"](vals)
         out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                     "raw_value": float(value), "score": score,
                     "label": scoring.LABELS[score], "detail": detail,
-                    "error": None, "measurable": True})
+                    "error": None, "measurable": True,
+                    "value_display": format_value(float(value), False)})
 
     out.sort(key=lambda r: [int(x) for x in r["check_id"].split(".")])
     return out
@@ -344,13 +368,15 @@ def main(argv=None) -> int:
     # be silently missing at INSERT time. Reconcile additively - never
     # drop or retype, since the existing rows are real history.
     ensure_columns(executor, f"{base}.{RESULTS_TABLE}",
-                   {"error": "STRING", "measurable": "BOOLEAN"})
+                   {"error": "STRING", "measurable": "BOOLEAN",
+                    "value_display": "STRING"})
     ensure_columns(executor, f"{base}.{SECTION_TABLE}",
                    {"not_measurable_count": "INT", "coverage_pct": "DOUBLE"})
 
     print("Writing results...")
     cols = ["run_id", "run_ts", "section", "check_id", "check_name",
-            "raw_value", "score", "label", "detail", "error", "measurable"]
+            "raw_value", "score", "label", "detail", "error", "measurable",
+            "value_display"]
     executor.write(f"{base}.{RESULTS_TABLE}", cols,
                    [dict(run_id=run_id, run_ts=now, **r) for r in results])
 
@@ -358,9 +384,16 @@ def main(argv=None) -> int:
              "grade", "active_count", "minimal_count", "none_count",
              "not_measurable_count", "coverage_pct", "weight"]
     rows = [dict(run_id=run_id, run_ts=now, **s) for s in sections]
+    # points / max_points are deliberately NULL on the OVERALL row.
+    # A section's score_pct IS points/max_points, but the overall is the
+    # weighted sum of the section percentages - summing the points would
+    # give a different figure (60.5% against 58.4% on the run that
+    # exposed this), and a reader dividing two columns that sit beside a
+    # third would get a number the dashboard never shows. Leaving them
+    # NULL says plainly that the overall is not derived that way.
     rows.append({"run_id": run_id, "run_ts": now, "section": "OVERALL",
-                 "points": sum(s["points"] for s in sections),
-                 "max_points": sum(s["max_points"] for s in sections),
+                 "points": None,
+                 "max_points": None,
                  "score_pct": overall, "grade": grade,
                  "active_count": sum(s["active_count"] for s in sections),
                  "minimal_count": sum(s["minimal_count"] for s in sections),

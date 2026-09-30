@@ -47,9 +47,14 @@
         "  section,\n",
         "  check_id,\n",
         "  check_name,\n",
-        "  label,\n",
+        "  CASE label\n",
+        "    WHEN 'ACTIVE'  THEN 'In real use'\n",
+        "    WHEN 'MINIMAL' THEN 'Barely used'\n",
+        "    WHEN 'NONE'    THEN 'Not used'\n",
+        "    ELSE label\n",
+        "  END AS usage_level,\n",
         "  score,\n",
-        "  raw_value,\n",
+        "  COALESCE(value_display, '') AS measured,\n",
         "  COALESCE(detail, '') AS detail,\n",
         "  CASE WHEN measurable = FALSE THEN 'not observable'\n",
         "       WHEN error IS NOT NULL THEN 'query failed'\n",
@@ -61,23 +66,29 @@
     },
     {
       "name": "adopt_label_mix",
-      "displayName": "Check Mix by Section",
+      "displayName": "Capability Usage",
       "queryLines": [
-        "SELECT section, label, COUNT(*) AS n_checks\n",
+        "SELECT\n",
+        "  CASE label\n",
+        "    WHEN 'ACTIVE'  THEN 'In real use'\n",
+        "    WHEN 'MINIMAL' THEN 'Barely used'\n",
+        "    ELSE 'Not used'\n",
+        "  END                AS usage_level,\n",
+        "  COUNT(*)           AS capabilities\n",
         "FROM assessment.results.adoption_check_history\n",
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1)\n",
-        "GROUP BY section, label\n"
+        "GROUP BY 1\n"
       ]
     },
     {
       "name": "adopt_gaps",
-      "displayName": "Unused Capabilities",
+      "displayName": "Capabilities Not Used",
       "queryLines": [
         "SELECT\n",
         "  section,\n",
         "  check_id,\n",
         "  check_name,\n",
-        "  raw_value,\n",
+        "  COALESCE(value_display, '') AS measured,\n",
         "  COALESCE(error, '') AS error\n",
         "FROM assessment.results.adoption_check_history\n",
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND score = 0 AND measurable = TRUE\n",
@@ -267,14 +278,13 @@
               "encodings": {
                 "value": {
                   "fieldName": "active_count",
-                  "displayName": "Capabilities Active"
+                  "displayName": "In Real Use"
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Capabilities Active",
-                "showDescription": true,
-                "description": "Checks scoring 2 \u2014 in real use"
+                "title": "In Real Use",
+                "showDescription": false
               }
             }
           },
@@ -316,7 +326,7 @@
                 "showTitle": true,
                 "title": "Barely Used",
                 "showDescription": true,
-                "description": "Checks scoring 1 \u2014 present but minimal"
+                "description": "Present but minimal"
               }
             }
           },
@@ -351,14 +361,13 @@
               "encodings": {
                 "value": {
                   "fieldName": "none_count",
-                  "displayName": "Unused"
+                  "displayName": "Not Used"
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Unused",
-                "showDescription": true,
-                "description": "Checks scoring 0 \u2014 no evidence of use"
+                "title": "Not Used",
+                "showDescription": false
               }
             }
           },
@@ -506,12 +515,12 @@
                   "datasetName": "adopt_label_mix",
                   "fields": [
                     {
-                      "name": "label",
-                      "expression": "`label`"
+                      "name": "usage_level",
+                      "expression": "`usage_level`"
                     },
                     {
-                      "name": "n_checks",
-                      "expression": "`n_checks`"
+                      "name": "capabilities",
+                      "expression": "`capabilities`"
                     }
                   ],
                   "disaggregated": true
@@ -523,26 +532,26 @@
               "widgetType": "pie",
               "encodings": {
                 "angle": {
-                  "fieldName": "n_checks",
+                  "fieldName": "capabilities",
                   "scale": {
                     "type": "quantitative"
                   }
                 },
                 "color": {
-                  "fieldName": "label",
+                  "fieldName": "usage_level",
                   "scale": {
                     "type": "categorical",
                     "mappings": [
                       {
-                        "value": "NONE",
+                        "value": "Not used",
                         "color": "#EF4444"
                       },
                       {
-                        "value": "MINIMAL",
+                        "value": "Barely used",
                         "color": "#F59E0B"
                       },
                       {
-                        "value": "ACTIVE",
+                        "value": "In real use",
                         "color": "#10B981"
                       }
                     ]
@@ -551,9 +560,9 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Check Mix",
+                "title": "How Much of the Platform Is Used",
                 "showDescription": true,
-                "description": "How every check resolved across all six sections."
+                "description": "Every capability checked, by how much it is used. In real use = clear evidence of regular activity. Barely used = switched on but little activity, usually the cheapest gap to close. Not used = no evidence at all."
               }
             }
           },
@@ -649,15 +658,15 @@
                   },
                   {
                     "fieldName": "active_count",
-                    "displayName": "Active"
+                    "displayName": "In Real Use"
                   },
                   {
                     "fieldName": "minimal_count",
-                    "displayName": "Minimal"
+                    "displayName": "Barely Used"
                   },
                   {
                     "fieldName": "none_count",
-                    "displayName": "Unused"
+                    "displayName": "Not Used"
                   },
                   {
                     "fieldName": "not_measurable_count",
@@ -710,8 +719,8 @@
                       "expression": "`check_name`"
                     },
                     {
-                      "name": "raw_value",
-                      "expression": "`raw_value`"
+                      "name": "measured",
+                      "expression": "`measured`"
                     },
                     {
                       "name": "error",
@@ -740,20 +749,20 @@
                     "displayName": "Capability"
                   },
                   {
-                    "fieldName": "raw_value",
+                    "fieldName": "measured",
                     "displayName": "Measured"
                   },
                   {
                     "fieldName": "error",
-                    "displayName": "Not Measurable Because"
+                    "displayName": "Why"
                   }
                 ]
               },
               "frame": {
                 "showTitle": true,
-                "title": "Unused Capabilities",
+                "title": "Capabilities Not Used",
                 "showDescription": true,
-                "description": "Every check scoring NONE \u2014 the platform surface not being used. Checks that could not be observed at all are excluded here and from the score; they appear in All Checks as 'not observable'."
+                "description": "Every capability with no evidence of use \u2014 the platform surface being paid for but not exercised. Checks that could not be observed at all are excluded here and from the score; they appear in All Checks as 'not observable'."
               }
             }
           },
@@ -786,12 +795,12 @@
                       "expression": "`check_name`"
                     },
                     {
-                      "name": "label",
-                      "expression": "`label`"
+                      "name": "usage_level",
+                      "expression": "`usage_level`"
                     },
                     {
-                      "name": "raw_value",
-                      "expression": "`raw_value`"
+                      "name": "measured",
+                      "expression": "`measured`"
                     },
                     {
                       "name": "detail",
@@ -824,11 +833,11 @@
                     "displayName": "Capability"
                   },
                   {
-                    "fieldName": "label",
-                    "displayName": "Level"
+                    "fieldName": "usage_level",
+                    "displayName": "Usage"
                   },
                   {
-                    "fieldName": "raw_value",
+                    "fieldName": "measured",
                     "displayName": "Measured"
                   },
                   {
