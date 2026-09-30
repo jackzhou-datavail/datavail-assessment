@@ -221,6 +221,21 @@ def execute(executor, items, checks, args, meta_extra: dict | None = None) -> in
     params = {"lookback": args.lookback_days,
               "excluded": ", ".join(f"'{c}'" for c in excluded)}
 
+    # `impl` in the registry is a hand-written assertion that a check
+    # exists. The runner already reports impl:true with no check, as a
+    # reason on the result. The reverse - a check written but the flag
+    # never flipped - would otherwise be silent: the check sits in the
+    # module and never runs, and the item reports "no collector
+    # implemented yet" forever. Fail loudly instead.
+    orphaned = sorted(
+        (set(getattr(checks, "CHECKS", {})) | set(getattr(checks, "PY_CHECKS", {})))
+        - {i.id for i in items if i.implemented}
+    )
+    if orphaned:
+        raise SystemExit(
+            "%d check(s) are defined but marked impl: false in the registry, so "
+            "they would never run: %s" % (len(orphaned), ", ".join(orphaned)))
+
     print(f"run_id={run_id}  lookback={args.lookback_days}d")
     print(f"excluded catalogs: {', '.join(excluded)}")
     facts = probe_facts(executor)
