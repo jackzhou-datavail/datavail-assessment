@@ -1,53 +1,71 @@
-"""The Conformance page.
+"""The Conformance page - a placeholder while it is redesigned.
 
-Answers the question the Adoption page deliberately does not: of the
-things this workspace does, how well does it do them? Adoption measures
-breadth; conformance measures quality, and its findings are the evidence
-behind a score.
+Deliberately imports nothing from `datavail_assessment.conformance`. The
+page previously lifted the scorecard out of that package's dashboard
+builder, which meant any change to the conformance dashboard reached this
+one too. Cutting the import makes the two independent: conformance can be
+reworked freely without this dashboard moving under it.
 
-The page is lifted wholesale from the standalone conformance dashboard
-rather than rewritten - same datasets, same widgets, same layout - so
-the two cannot drift apart. That dashboard's builder stays the single
-definition; this module selects one of its pages and re-labels it.
+The full three-page conformance view ships separately as the
+**Conformance Assessment** dashboard, built by
+`datavail_assessment.conformance.dashboard.build` and deployed by the same
+bundle. Nothing was lost by blanking this page; this one links to it.
 
-Reads what `datavail_assessment.conformance.run` writes: the six result
-tables and the v_latest_report view.
+Restoring the embedded scorecard means putting back the import, a
+SOURCE_PAGE index, and the dataset filter - see git history for this file.
 """
 
 from __future__ import annotations
 
-from datavail_assessment.conformance.dashboard import build as source
+import os
 
-# Which page of the standalone dashboard to surface here.
-#   0  Onboarding Scorecard   - score, coverage, per-category grades
-#   1  Findings               - remediation list and object-level evidence
-#   2  Coverage & Blind Spots - what could not be measured, and why
-SOURCE_PAGE = 0
+from .. import widgets as w
 
 PAGE_NAME = "conformance"
 PAGE_TITLE = "Conformance"
 
+# The bundle creates one dashboard per target, so this id identifies the
+# DEV Conformance Assessment. Override when generating for another target:
+#
+#   CONFORMANCE_DASHBOARD_ID=<id> python -m datavail_assessment.dashboard.build
+#
+# Find it with:
+#   databricks lakeview list -o json | jq -r \
+#     '.[] | select(.display_name | endswith("Conformance Assessment"))
+#          | "\(.dashboard_id)  \(.display_name)"'
+CONFORMANCE_DASHBOARD_ID = os.environ.get(
+    "CONFORMANCE_DASHBOARD_ID", "01f1bce06cec1e7b8007a4aa4976e1d2")
 
-def _page(catalog: str = "c", schema: str = "s") -> dict:
-    """The source page. Widget layout carries no catalog or schema, so
-    placeholders are fine when only the layout is wanted."""
-    return source.build(catalog, schema)["pages"][SOURCE_PAGE]
+# Host-relative on purpose: the same JSON then works in any workspace, and
+# only the id above is environment-specific.
+CONFORMANCE_URL = f"/dashboardsv3/{CONFORMANCE_DASHBOARD_ID}/published"
 
 
 def datasets(catalog: str, schema: str) -> list[dict]:
-    """Only the datasets this page actually references.
-
-    The source dashboard defines datasets for all three of its pages;
-    carrying the unused ones over would make the combined dashboard run
-    queries nothing displays.
-    """
-    built = source.build(catalog, schema)
-    page = built["pages"][SOURCE_PAGE]
-    used = {q["query"]["datasetName"]
-            for w in page["layout"]
-            for q in w["widget"].get("queries", [])}
-    return [ds for ds in built["datasets"] if ds["name"] in used]
+    """None. A text-only page runs no queries, so the dashboard should not
+    carry datasets nothing reads."""
+    return []
 
 
 def layout() -> list[dict]:
-    return _page()["layout"]
+    return [
+        w.text("conformance_placeholder", [
+            "# Conformance - under construction",
+            "",
+            "This page is being rebuilt and shows no data yet.",
+            "",
+            f"### [Open the Conformance Assessment dashboard]({CONFORMANCE_URL})",
+            "",
+            "Its three pages carry everything this one used to show, and more:",
+            "",
+            "- **Conformance: Scorecard** - overall score, coverage,"
+            " per-category grades",
+            "- **Conformance: Findings** - remediation backlog and"
+            " object-level evidence",
+            "- **Conformance: Coverage & Blind Spots** - what could not be"
+            " measured, and why",
+            "",
+            "_Adoption, on the previous page, is unaffected - it is collected"
+            " and scored independently._",
+        ], 0, 0, 6, 10),
+    ]
