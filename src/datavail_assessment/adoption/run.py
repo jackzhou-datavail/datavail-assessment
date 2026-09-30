@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS {base}.adoption_check_history (
   score      INT       COMMENT '0 = NONE, 1 = MINIMAL, 2 = ACTIVE',
   label      STRING    COMMENT 'NONE | MINIMAL | ACTIVE',
   detail     STRING    COMMENT 'Supporting evidence, where a check has any',
-  error      STRING    COMMENT 'Why a check could not be measured; NULL when it was'
+  error      STRING    COMMENT 'Why a check could not be measured; NULL when it was',
+  measurable BOOLEAN   COMMENT 'FALSE when the capability cannot be observed from system tables at all'
 )
 USING DELTA
 COMMENT 'Per-check adoption scores, one row per check per run.';
@@ -52,6 +53,8 @@ CREATE TABLE IF NOT EXISTS {base}.adoption_section_score (
   active_count  INT       COMMENT 'Checks scoring 2',
   minimal_count INT       COMMENT 'Checks scoring 1',
   none_count    INT       COMMENT 'Checks scoring 0',
+  not_measurable_count INT COMMENT 'Checks excluded because the capability cannot be observed',
+  coverage_pct  DOUBLE    COMMENT 'Share of this section that could be measured at all',
   weight        DOUBLE    COMMENT 'Section weight in the overall score'
 )
 USING DELTA
@@ -84,6 +87,40 @@ def scalar(executor, sql: str, params: dict):
     return (0.0 if v is None else float(v)), None
 
 
+SAMPLE_SIZE = 25
+
+
+def sample_delta_history(executor, params: dict) -> dict:
+    """How many of a sample of managed tables carry more than one Delta version.
+
+    Delta history is not in system tables, so this is the only way to
+    answer the checklist's question. Sampling keeps it bounded: DESCRIBE
+    HISTORY is one round trip per table, which does not scale to a whole
+    estate.
+    """
+    rows = executor.query(f"""
+        SELECT CONCAT_WS('.', table_catalog, table_schema, table_name) AS fq
+        FROM system.information_schema.tables
+        WHERE table_type = 'MANAGED'
+          AND table_schema != 'information_schema'
+          AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+        LIMIT {SAMPLE_SIZE}
+    """)
+    sampled = multi = 0
+    for r in rows:
+        try:
+            hist = executor.query(f"DESCRIBE HISTORY {r['fq']}")
+        except Exception:  # noqa: BLE001 - an unreadable table is not a sample
+            continue
+        sampled += 1
+        if len(hist) > 1:
+            multi += 1
+    return {"sampled": sampled, "multi_version": multi}
+
+
+SAMPLERS = {"delta_history": sample_delta_history}
+
+
 def run_checks(executor, params: dict) -> list[dict]:
     """Score all 51 checks. A failed query is recorded, not raised."""
     out = []
@@ -93,12 +130,18 @@ def run_checks(executor, params: dict) -> list[dict]:
         if err:
             out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                         "raw_value": None, "score": 0, "label": "NONE",
-                        "detail": None, "error": err})
+                        "detail": None, "error": err, "measurable": True})
             continue
         score = scoring.score_thresholds(value, c["minimal"], c["active"])
         out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                     "raw_value": value, "score": score,
-                    "label": scoring.LABELS[score], "detail": None, "error": None})
+                    "label": scoring.LABELS[score], "detail": None,
+                    "error": None, "measurable": True})
+
+    for cid, c in checks_mod.NOT_MEASURABLE.items():
+        out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
+                    "raw_value": None, "score": 0, "label": scoring.NOT_MEASURABLE,
+                    "detail": None, "error": c["reason"], "measurable": False})
 
     for cid, c in checks_mod.COMPOUND_CHECKS.items():
         vals, err = {}, None
@@ -111,12 +154,24 @@ def run_checks(executor, params: dict) -> list[dict]:
         if err:
             out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                         "raw_value": None, "score": 0, "label": "NONE",
-                        "detail": None, "error": err})
+                        "detail": None, "error": err, "measurable": True})
             continue
+        sampler = SAMPLERS.get(c.get("sampler"))
+        if sampler:
+            try:
+                vals.update(sampler(executor, params))
+            except Exception as exc:  # noqa: BLE001
+                out.append({"check_id": cid, "section": c["section"],
+                            "check_name": c["name"], "raw_value": None, "score": 0,
+                            "label": "NONE", "detail": None,
+                            "error": f"{type(exc).__name__}: {exc}"[:400],
+                            "measurable": True})
+                continue
         value, score, detail = c["combine"](vals)
         out.append({"check_id": cid, "section": c["section"], "check_name": c["name"],
                     "raw_value": float(value), "score": score,
-                    "label": scoring.LABELS[score], "detail": detail, "error": None})
+                    "label": scoring.LABELS[score], "detail": detail,
+                    "error": None, "measurable": True})
 
     out.sort(key=lambda r: [int(x) for x in r["check_id"].split(".")])
     return out
@@ -160,9 +215,11 @@ def main(argv=None) -> int:
         if r["section"] != section_now:
             section_now = r["section"]
             print(f"\n  --- {section_now} ---")
-        flag = " !" if r["error"] else ""
-        val = "err" if r["raw_value"] is None else f"{r['raw_value']:g}"
-        print(f"  [{blocks[r['score']]}] {r['check_id']:>4}  {r['check_name'][:44]:<44} "
+        measurable = r.get("measurable", True)
+        mark = "--" if not measurable else blocks[r["score"]]
+        flag = " !" if (r["error"] and measurable) else ""
+        val = "n/a" if r["raw_value"] is None else f"{r['raw_value']:g}"
+        print(f"  [{mark}] {r['check_id']:>4}  {r['check_name'][:44]:<44} "
               f"{val:>8}  {r['label']}{flag}")
 
     sections, overall, grade = scoring.roll_up(results, checks_mod.SECTIONS)
@@ -171,10 +228,15 @@ def main(argv=None) -> int:
         bar = "#" * int(s["score_pct"] / 2) + "." * (50 - int(s["score_pct"] / 2))
         print(f"  {s['section']:<18} [{bar}] {s['score_pct']:5.1f}%  {s['grade']}")
         print(f"  {'':18}  active={s['active_count']} minimal={s['minimal_count']} "
-              f"none={s['none_count']}  ({s['points']}/{s['max_points']} pts)")
-    errs = sum(1 for r in results if r["error"])
-    print(f"\nOVERALL ADOPTION {overall:.1f}%  -  {grade}   "
-          f"(checks: {len(results)}, unmeasurable: {errs})")
+              f"none={s['none_count']} not-measurable={s['not_measurable_count']}  "
+              f"({s['points']}/{s['max_points']} pts, {s['coverage_pct']:.0f}% measurable)")
+    nm = sum(1 for r in results if not r.get("measurable", True))
+    errs = sum(1 for r in results if r["error"] and r.get("measurable", True))
+    scored = len(results) - nm
+    print(f"\nOVERALL ADOPTION {overall:.1f}%  -  {grade}")
+    print(f"  scored {scored} of {len(results)} checks "
+          f"({100.0 * scored / len(results):.0f}% measurable); "
+          f"{nm} not observable from system tables, {errs} query errors")
 
     if args.dry_run:
         print("\n--dry-run: nothing written.")
@@ -188,16 +250,20 @@ def main(argv=None) -> int:
     # earlier version of this assessment, so a column added since would
     # be silently missing at INSERT time. Reconcile additively - never
     # drop or retype, since the existing rows are real history.
-    ensure_columns(executor, f"{base}.{RESULTS_TABLE}", {"error": "STRING"})
+    ensure_columns(executor, f"{base}.{RESULTS_TABLE}",
+                   {"error": "STRING", "measurable": "BOOLEAN"})
+    ensure_columns(executor, f"{base}.{SECTION_TABLE}",
+                   {"not_measurable_count": "INT", "coverage_pct": "DOUBLE"})
 
     print("Writing results...")
     cols = ["run_id", "run_ts", "section", "check_id", "check_name",
-            "raw_value", "score", "label", "detail", "error"]
+            "raw_value", "score", "label", "detail", "error", "measurable"]
     executor.write(f"{base}.{RESULTS_TABLE}", cols,
                    [dict(run_id=run_id, run_ts=now, **r) for r in results])
 
     scols = ["run_id", "run_ts", "section", "points", "max_points", "score_pct",
-             "grade", "active_count", "minimal_count", "none_count", "weight"]
+             "grade", "active_count", "minimal_count", "none_count",
+             "not_measurable_count", "coverage_pct", "weight"]
     rows = [dict(run_id=run_id, run_ts=now, **s) for s in sections]
     rows.append({"run_id": run_id, "run_ts": now, "section": "OVERALL",
                  "points": sum(s["points"] for s in sections),
@@ -206,6 +272,10 @@ def main(argv=None) -> int:
                  "active_count": sum(s["active_count"] for s in sections),
                  "minimal_count": sum(s["minimal_count"] for s in sections),
                  "none_count": sum(s["none_count"] for s in sections),
+                 "not_measurable_count": sum(s["not_measurable_count"] for s in sections),
+                 "coverage_pct": round(
+                     100.0 * sum(s["max_points"] for s in sections) / (2 * len(results)), 1)
+                     if results else 0.0,
                  "weight": 1.0})
     executor.write(f"{base}.{SECTION_TABLE}", scols, rows)
 

@@ -37,6 +37,8 @@ SELECT
   active_count,
   minimal_count,
   none_count,
+  not_measurable_count,
+  coverage_pct,
   run_ts
 FROM {base}.adoption_section_score
 WHERE run_id = {run} AND section = 'OVERALL'
@@ -52,6 +54,8 @@ SELECT
   active_count,
   minimal_count,
   none_count,
+  not_measurable_count,
+  coverage_pct,
   weight
 FROM {base}.adoption_section_score
 WHERE run_id = {run} AND section <> 'OVERALL'
@@ -66,7 +70,9 @@ SELECT
   score,
   raw_value,
   COALESCE(detail, '') AS detail,
-  CASE WHEN error IS NULL THEN 'measured' ELSE 'not measurable' END AS measurable
+  CASE WHEN measurable = FALSE THEN 'not observable'
+       WHEN error IS NOT NULL THEN 'query failed'
+       ELSE 'measured' END AS measurable
 FROM {base}.adoption_check_history
 WHERE run_id = {run}
 ORDER BY check_id
@@ -87,7 +93,7 @@ SELECT
   raw_value,
   COALESCE(error, '') AS error
 FROM {base}.adoption_check_history
-WHERE run_id = {run} AND score = 0
+WHERE run_id = {run} AND score = 0 AND measurable = TRUE
 ORDER BY section, check_id
 """),
     ]
@@ -115,7 +121,10 @@ def layout() -> list[dict]:
         counter("adopt_kpi_minimal", "adopt_overall", "minimal_count", "Barely Used",
                 "Checks scoring 1 — present but minimal", 4, 5, 4, 3),
         counter("adopt_kpi_none", "adopt_overall", "none_count", "Unused",
-                "Checks scoring 0 — no evidence of use", 8, 5, 4, 3),
+                "Checks scoring 0 — no evidence of use", 8, 5, 2, 3),
+        counter("adopt_kpi_coverage", "adopt_overall", "coverage_pct", "Measurable",
+                "Share of the checklist observable from system tables. The score "
+                "is computed over these only.", 10, 5, 2, 3),
 
         bar("adopt_section_bars", "adopt_sections", "score_pct", "section",
             "Adoption by Section",
@@ -129,7 +138,9 @@ def layout() -> list[dict]:
               [("section", "Section"), ("grade", "Grade"), ("score_pct", "Score %"),
                ("points", "Points"), ("max_points", "Max"),
                ("active_count", "Active"), ("minimal_count", "Minimal"),
-               ("none_count", "Unused"), ("weight", "Weight")],
+               ("none_count", "Unused"),
+               ("not_measurable_count", "Not Observable"),
+               ("coverage_pct", "Measurable %"), ("weight", "Weight")],
               "Section Scorecard",
               "Weight is each section's share of the overall score.",
               0, 15, 12, 6),
@@ -139,8 +150,8 @@ def layout() -> list[dict]:
                ("raw_value", "Measured"), ("error", "Not Measurable Because")],
               "Unused Capabilities",
               "Every check scoring NONE — the platform surface not being used. "
-              "A non-empty last column means the check could not be measured at all, "
-              "which is not the same as unused.",
+              "Checks that could not be observed at all are excluded here and from "
+              "the score; they appear in All Checks as 'not observable'.",
               0, 21, 12, 9),
 
         table("adopt_checks_table", "adopt_checks",

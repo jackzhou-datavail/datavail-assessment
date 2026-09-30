@@ -37,6 +37,18 @@ def check(cid, section, name, sql, minimal, active, pct=False):
                    "minimal": minimal, "active": active, "pct": pct}
 
 
+# Capabilities the checklist specifies but system tables cannot see.
+# Recorded rather than proxied: substituting a loosely-related metric
+# would report a number for something that was never measured, and
+# scoring them 0 would read as "unused" when the truth is "unobserved".
+# Each names the API that would actually answer it.
+NOT_MEASURABLE: dict[str, dict] = {}
+
+
+def not_measurable(cid, section, name, reason):
+    NOT_MEASURABLE[cid] = {"section": section, "name": name, "reason": reason}
+
+
 # --- Workspace -----------------------------------------------------
 
 check(
@@ -259,17 +271,6 @@ check(
     minimal=1.0, active=3.0,
 )
 
-check(
-    "2.12", "SQL", "Dashboards actively updated (90d)",
-    """
-    SELECT COUNT(DISTINCT request_params.dashboard_id)
-      FROM system.access.audit
-      WHERE event_date >= '{DAYS_90}'
-        AND service_name = 'dashboards'
-        AND action_name = 'update'
-    """,
-    minimal=1.0, active=2.0,
-)
 
 # --- Data Engineering ----------------------------------------------
 
@@ -352,29 +353,7 @@ check(
     minimal=1.0, active=50.0,
 )
 
-check(
-    "3.9", "Data Engineering", "Tables modified recently (90d)",
-    """
-    SELECT COUNT(*)
-      FROM system.information_schema.tables
-      WHERE table_catalog NOT IN ('system', 'samples', '__databricks_internal')
-        AND table_schema != 'information_schema'
-        AND last_altered IS NOT NULL
-        AND last_altered >= '{DAYS_90}'
-    """,
-    minimal=1.0, active=11.0,
-)
 
-check(
-    "3.11", "Data Engineering", "Distinct trigger types",
-    """
-    SELECT COUNT(DISTINCT trigger_type)
-      FROM system.lakeflow.jobs
-      WHERE delete_time IS NULL
-        AND trigger_type IS NOT NULL
-    """,
-    minimal=1.0, active=3.0,
-)
 
 check(
     "3.12", "Data Engineering", "Jobs compute DBUs (30d)",
@@ -510,15 +489,6 @@ check(
     minimal=1.0, active=2.0,
 )
 
-check(
-    "4.10", "AI/ML", "Feature Store activity",
-    """
-    SELECT COUNT(*)
-      FROM system.access.audit
-      WHERE service_name = 'featureStore'
-    """,
-    minimal=1.0, active=3.0,
-)
 
 check(
     "4.11", "AI/ML", "Vector search indexes created",
@@ -531,27 +501,7 @@ check(
     minimal=1.0, active=2.0,
 )
 
-check(
-    "4.12", "AI/ML", "Agent Bricks / AI function activity",
-    """
-    SELECT COUNT(*)
-      FROM system.access.audit
-      WHERE action_name LIKE '%AgentBrick%'
-         OR action_name LIKE '%agentTile%'
-         OR (service_name = 'aiFunction' AND action_name LIKE '%create%')
-    """,
-    minimal=1.0, active=2.0,
-)
 
-check(
-    "4.13", "AI/ML", "Serving endpoints with entities",
-    """
-    SELECT COUNT(DISTINCT endpoint_name)
-      FROM system.serving.served_entities
-      WHERE entity_name IS NOT NULL
-    """,
-    minimal=1.0, active=2.0,
-)
 
 check(
     "4.14", "AI/ML", "AI SQL function queries (30d)",
@@ -592,9 +542,13 @@ check(
 COMPOUND_CHECKS: dict[str, dict] = {}
 
 
-def compound(cid, section, name, queries, combine):
+def compound(cid, section, name, queries, combine, sampler=None):
+    """`sampler` names an extra measurement the runner performs before
+    combine() - used where a check needs per-object inspection that no
+    single query can provide."""
     COMPOUND_CHECKS[cid] = {"section": section, "name": name,
-                            "queries": queries, "combine": combine}
+                            "queries": queries, "combine": combine,
+                            "sampler": sampler}
 
 
 def _uc_objects(v):
@@ -698,4 +652,94 @@ compound(
         """,
     },
     _scheduled_jobs,
+)
+
+
+# ---------------------------------------------------------------------
+# Aligned with the checklist
+#
+# adoption_checks.md specifies what each check should measure. Six of
+# them were implemented against a proxy instead. Two are measurable as
+# specified and are now measured that way; four are not observable from
+# system tables and say so rather than reporting a substitute.
+# ---------------------------------------------------------------------
+
+# 4.10 - "Feature tables present", per the checklist an
+# information_schema question, not an audit-log one. Unity Catalog does
+# not label a table as a feature table, but a feature table must declare
+# a primary key, and few other tables do. That makes PK-constrained
+# tables the closest structural signal available; it will over-count a
+# workspace that declares primary keys as documentation.
+check(
+    "4.10", "AI/ML", "Feature tables present (tables with a primary key)",
+    """
+    SELECT COUNT(DISTINCT CONCAT_WS('.', table_catalog, table_schema, table_name))
+      FROM system.information_schema.table_constraints
+      WHERE constraint_type = 'PRIMARY KEY'
+        AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+    """,
+    minimal=1.0, active=3.0,
+)
+
+
+def _tables_with_history(v):
+    """3.9 - tables carrying more than one Delta version.
+
+    The checklist asks for multi-version history, which means the table
+    has been written more than once: iterative processing rather than a
+    one-off load. Delta history is not in system tables, so this samples
+    tables and runs DESCRIBE HISTORY on each, then extrapolates the
+    share across the estate.
+    """
+    sampled, multi, total = v["sampled"], v["multi_version"], v["total_tables"]
+    if not sampled:
+        return 0.0, 0, "no managed tables to sample"
+    share = multi / sampled
+    estimated = share * total
+    score = 2 if estimated > 10 else (1 if estimated >= 1 else 0)
+    return round(estimated, 1), score, f"{multi}/{sampled} sampled, {total} tables total"
+
+
+compound(
+    "3.9", "Data Engineering", "Tables with history > 1 version",
+    {
+        "total_tables": """
+            SELECT COUNT(*)
+            FROM system.information_schema.tables
+            WHERE table_type = 'MANAGED'
+              AND table_schema != 'information_schema'
+              AND table_catalog NOT IN ('system', 'samples', '__databricks_internal')
+        """,
+    },
+    _tables_with_history,
+    sampler="delta_history",
+)
+
+not_measurable(
+    "2.12", "SQL", "Parameterized queries / filters in dashboards",
+    "Dashboard datasets and their parameters live in the Lakeview API "
+    "(GET /api/2.0/lakeview/dashboards), not in system tables. Dashboard "
+    "edit events in system.access.audit show a dashboard changed, not "
+    "whether it takes parameters.",
+)
+
+not_measurable(
+    "3.11", "Data Engineering", "Task types used (notebook, Python, SQL, JAR, pipeline)",
+    "system.lakeflow.job_tasks carries job_id, task_key, depends_on_keys, "
+    "timeout_seconds and health_rules - there is no task_type column. "
+    "Task types come from the Jobs API (GET /api/2.2/jobs/get).",
+)
+
+not_measurable(
+    "4.12", "AI/ML", "Agent Bricks tiles defined",
+    "Tile inventory is not exposed in system tables. Audit events name "
+    "actions taken, which is activity rather than the configured tiles "
+    "the checklist asks to count.",
+)
+
+not_measurable(
+    "4.13", "AI/ML", "Inference tables logging enabled",
+    "system.serving.served_entities describes what each endpoint serves, "
+    "not its logging configuration - there is no inference-table column. "
+    "The setting comes from the Serving endpoints API.",
 )

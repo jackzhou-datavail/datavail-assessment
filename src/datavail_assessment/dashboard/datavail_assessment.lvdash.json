@@ -12,6 +12,8 @@
         "  active_count,\n",
         "  minimal_count,\n",
         "  none_count,\n",
+        "  not_measurable_count,\n",
+        "  coverage_pct,\n",
         "  run_ts\n",
         "FROM assessment.results.adoption_section_score\n",
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND section = 'OVERALL'\n"
@@ -30,6 +32,8 @@
         "  active_count,\n",
         "  minimal_count,\n",
         "  none_count,\n",
+        "  not_measurable_count,\n",
+        "  coverage_pct,\n",
         "  weight\n",
         "FROM assessment.results.adoption_section_score\n",
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND section <> 'OVERALL'\n"
@@ -47,7 +51,9 @@
         "  score,\n",
         "  raw_value,\n",
         "  COALESCE(detail, '') AS detail,\n",
-        "  CASE WHEN error IS NULL THEN 'measured' ELSE 'not measurable' END AS measurable\n",
+        "  CASE WHEN measurable = FALSE THEN 'not observable'\n",
+        "       WHEN error IS NOT NULL THEN 'query failed'\n",
+        "       ELSE 'measured' END AS measurable\n",
         "FROM assessment.results.adoption_check_history\n",
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1)\n",
         "ORDER BY check_id\n"
@@ -74,7 +80,7 @@
         "  raw_value,\n",
         "  COALESCE(error, '') AS error\n",
         "FROM assessment.results.adoption_check_history\n",
-        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND score = 0\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND score = 0 AND measurable = TRUE\n",
         "ORDER BY section, check_id\n"
       ]
     },
@@ -359,7 +365,49 @@
           "position": {
             "x": 8,
             "y": 5,
-            "width": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "adopt_kpi_coverage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "adopt_overall",
+                  "fields": [
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "coverage_pct",
+                  "displayName": "Measurable"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Measurable",
+                "showDescription": true,
+                "description": "Share of the checklist observable from system tables. The score is computed over these only."
+              }
+            }
+          },
+          "position": {
+            "x": 10,
+            "y": 5,
+            "width": 2,
             "height": 3
           }
         },
@@ -558,6 +606,14 @@
                       "expression": "`none_count`"
                     },
                     {
+                      "name": "not_measurable_count",
+                      "expression": "`not_measurable_count`"
+                    },
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    },
+                    {
                       "name": "weight",
                       "expression": "`weight`"
                     }
@@ -602,6 +658,14 @@
                   {
                     "fieldName": "none_count",
                     "displayName": "Unused"
+                  },
+                  {
+                    "fieldName": "not_measurable_count",
+                    "displayName": "Not Observable"
+                  },
+                  {
+                    "fieldName": "coverage_pct",
+                    "displayName": "Measurable %"
                   },
                   {
                     "fieldName": "weight",
@@ -689,7 +753,7 @@
                 "showTitle": true,
                 "title": "Unused Capabilities",
                 "showDescription": true,
-                "description": "Every check scoring NONE \u2014 the platform surface not being used. A non-empty last column means the check could not be measured at all, which is not the same as unused."
+                "description": "Every check scoring NONE \u2014 the platform surface not being used. Checks that could not be observed at all are excluded here and from the score; they appear in All Checks as 'not observable'."
               }
             }
           },
