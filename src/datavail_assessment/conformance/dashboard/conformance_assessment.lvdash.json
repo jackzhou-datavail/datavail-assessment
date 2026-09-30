@@ -14,7 +14,7 @@
         "  s.n_not_applicable,\n",
         "  s.n_patterns,\n",
         "  CASE\n",
-        "    WHEN s.coverage_pct < 40 THEN 'INSUFFICIENT DATA'\n",
+        "    WHEN s.overall_score IS NULL THEN 'NOT AVAILABLE'\n",
         "    WHEN s.overall_score >= 80 THEN 'GOOD'\n",
         "    WHEN s.overall_score >= 60 THEN 'FAIR'\n",
         "    ELSE 'POOR'\n",
@@ -40,7 +40,7 @@
         "  n_not_applicable,\n",
         "  n_poor,\n",
         "  CASE\n",
-        "    WHEN coverage_pct < 40 THEN 'INSUFFICIENT DATA'\n",
+        "    WHEN weighted_score IS NULL THEN 'NOT AVAILABLE'\n",
         "    WHEN weighted_score >= 80 THEN 'GOOD'\n",
         "    WHEN weighted_score >= 60 THEN 'FAIR'\n",
         "    ELSE 'POOR'\n",
@@ -170,9 +170,16 @@
               "lines": [
                 "# Conformance Assessment\n",
                 "\n",
-                "How closely this workspace follows documented Databricks practice, measured from Unity Catalog system tables against the pattern library.\n",
+                "**Of the things this workspace does, how well does it do them?**\n",
                 "\n",
-                "**Read the score with the coverage.** Only checks that could actually be measured contribute to a score. A category measured on thin evidence is graded *INSUFFICIENT DATA* rather than given a misleading number.\n"
+                "Two numbers, and they answer different questions:\n",
+                "\n",
+                "- **Score** - of the checks we ran, how closely the practice was followed.\n",
+                "- **Coverage** - how many of the checks we could run at all.\n",
+                "\n",
+                "**Low coverage is our gap, not the workspace's.** A check with no result is one we could not run - some are not written yet, most need a source system tables do not expose, or judgment a query cannot make. Low coverage means we looked at less, not that the workspace did less.\n",
+                "\n",
+                "*NOT AVAILABLE* means nothing in that category could be measured.\n"
               ]
             }
           },
@@ -180,7 +187,7 @@
             "x": 0,
             "y": 0,
             "width": 6,
-            "height": 5
+            "height": 6
           }
         },
         {
@@ -214,7 +221,7 @@
                 "showTitle": true,
                 "title": "Conformance Score",
                 "showDescription": true,
-                "description": "Weighted mean conformance across measured checks (0-100)"
+                "description": "Severity-weighted % across measured checks"
               }
             }
           },
@@ -256,7 +263,7 @@
                 "showTitle": true,
                 "title": "Measurement Coverage",
                 "showDescription": true,
-                "description": "Share of applicable weight that could be measured"
+                "description": "Severity-weighted % of all checks we could run"
               }
             }
           },
@@ -297,8 +304,7 @@
               "frame": {
                 "showTitle": true,
                 "title": "Overall Implementation",
-                "showDescription": true,
-                "description": "GOOD >= 80, FAIR >= 60, else POOR"
+                "showDescription": false
               }
             }
           },
@@ -382,7 +388,7 @@
                 "showTitle": true,
                 "title": "Checks Measured",
                 "showDescription": true,
-                "description": "Patterns that produced a percentage"
+                "description": "Checks that produced a score"
               }
             }
           },
@@ -417,14 +423,14 @@
               "encodings": {
                 "value": {
                   "fieldName": "n_not_available",
-                  "displayName": "Not Measurable"
+                  "displayName": "Checks Not Available"
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Not Measurable",
+                "title": "Checks Not Available",
                 "showDescription": true,
-                "description": "Patterns with no obtainable data this run"
+                "description": "Mostly practices with no check written yet; a few ran and found no data. Coverage page has the split."
               }
             }
           },
@@ -495,7 +501,7 @@
                         "color": "#EF4444"
                       },
                       {
-                        "value": "INSUFFICIENT DATA",
+                        "value": "NOT AVAILABLE",
                         "color": "#94A3B8"
                       }
                     ]
@@ -566,7 +572,7 @@
                 "showTitle": true,
                 "title": "Measurement Coverage by Category",
                 "showDescription": true,
-                "description": "Share of each category actually measured. Below 40% the score is not trustworthy and the grade reads INSUFFICIENT DATA."
+                "description": "Severity-weighted %. Below 40%, read the score as indicative."
               }
             }
           },
@@ -626,31 +632,78 @@
                 "columns": [
                   {
                     "fieldName": "category",
-                    "displayName": "Category"
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "implementation",
-                    "displayName": "Implementation"
+                    "displayName": "Implementation",
+                    "title": "Implementation",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "score",
-                    "displayName": "Score"
+                    "displayName": "Score",
+                    "title": "Score",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
                   },
                   {
                     "fieldName": "coverage_pct",
-                    "displayName": "Coverage %"
+                    "displayName": "Measurement Coverage",
+                    "title": "Measurement Coverage",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
                   },
                   {
                     "fieldName": "n_measured",
-                    "displayName": "Measured"
+                    "displayName": "Checks Measured",
+                    "title": "Checks Measured",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
                   },
                   {
                     "fieldName": "n_not_available",
-                    "displayName": "Not Available"
+                    "displayName": "Checks Not Available",
+                    "title": "Checks Not Available",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
                   },
                   {
                     "fieldName": "n_poor",
-                    "displayName": "Poor"
+                    "displayName": "Poor",
+                    "title": "Poor",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
                   }
                 ]
               },
@@ -682,7 +735,7 @@
               "lines": [
                 "## Findings and Remediation\n",
                 "\n",
-                "Checks that produced a measurement, worst first. Severity is the pattern's rank in the registry; grade compares the measured conformance against that pattern's own target and floor.\n"
+                "Checks that produced a measurement, worst first. Grade compares the result against that check's own target and floor.\n"
               ]
             }
           },
@@ -746,35 +799,85 @@
                 "columns": [
                   {
                     "fieldName": "severity",
-                    "displayName": "Severity"
+                    "displayName": "Severity",
+                    "title": "Severity",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "category",
-                    "displayName": "Category"
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "title",
-                    "displayName": "Pattern"
+                    "displayName": "Check",
+                    "title": "Check",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "conformance_pct",
-                    "displayName": "Conformance %"
+                    "displayName": "Conformance %",
+                    "title": "Conformance %",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
                   },
                   {
                     "fieldName": "grade",
-                    "displayName": "Grade"
+                    "displayName": "Grade",
+                    "title": "Grade",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "coverage_detail",
-                    "displayName": "Objects"
+                    "displayName": "Objects",
+                    "title": "Objects",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "finding_count",
-                    "displayName": "Evidence Rows"
+                    "displayName": "Evidence Rows",
+                    "title": "Evidence Rows",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
                   },
                   {
                     "fieldName": "doc_path",
-                    "displayName": "Pattern Doc"
+                    "displayName": "Reference",
+                    "title": "Reference",
+                    "order": 7,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   }
                 ]
               },
@@ -853,7 +956,7 @@
                         "color": "#EF4444"
                       },
                       {
-                        "value": "INSUFFICIENT DATA",
+                        "value": "NOT AVAILABLE",
                         "color": "#94A3B8"
                       }
                     ]
@@ -865,7 +968,7 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Conformance by Pattern",
+                "title": "Conformance by Check",
                 "showDescription": true,
                 "description": "All measured checks. Bars near zero are the practices not being followed at all."
               }
@@ -931,35 +1034,84 @@
                 "columns": [
                   {
                     "fieldName": "severity",
-                    "displayName": "Severity"
+                    "displayName": "Severity",
+                    "title": "Severity",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "category",
-                    "displayName": "Category"
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "pattern_id",
-                    "displayName": "Pattern"
+                    "displayName": "Check",
+                    "title": "Check",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "object_type",
-                    "displayName": "Type"
+                    "displayName": "Type",
+                    "title": "Type",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "object_name",
-                    "displayName": "Object"
+                    "displayName": "Object",
+                    "title": "Object",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "owner",
-                    "displayName": "Owner"
+                    "displayName": "Owner",
+                    "title": "Owner",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "metric_name",
-                    "displayName": "Metric"
+                    "displayName": "Metric",
+                    "title": "Metric",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "metric_value",
-                    "displayName": "Value"
+                    "displayName": "Value",
+                    "title": "Value",
+                    "order": 7,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
                   }
                 ]
               },
@@ -991,7 +1143,7 @@
               "lines": [
                 "## Coverage and Blind Spots\n",
                 "\n",
-                "What this assessment could **not** see, and why. Every unmeasured pattern carries a reason: a system schema that is not enabled, a missing grant, a renamed column, or a check tier that needs an API this collector does not call.\n",
+                "What this assessment could **not** see, and why. Every check without a result carries a reason: a system schema that is not enabled, a missing grant, a renamed column, or a tier needing an API this collector does not call.\n",
                 "\n",
                 "This page exists so the headline score is never mistaken for a complete review.\n"
               ]
@@ -1065,7 +1217,7 @@
                 "showTitle": true,
                 "title": "Measurement Status",
                 "showDescription": true,
-                "description": "How the pattern library resolved against this workspace."
+                "description": "How every check resolved against this workspace."
               }
             }
           },
@@ -1120,9 +1272,9 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Patterns by Check Tier",
+                "title": "Checks by Tier",
                 "showDescription": true,
-                "description": "SYSTEM_TABLE is implemented. WORKSPACE_API, ACCOUNT_API, TABLE_DETAIL and MANUAL tiers need collectors that do not exist yet."
+                "description": "Why each check without a result has none."
               }
             }
           },
@@ -1174,31 +1326,61 @@
                 "columns": [
                   {
                     "fieldName": "severity",
-                    "displayName": "Severity"
+                    "displayName": "Severity",
+                    "title": "Severity",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "check_tier",
-                    "displayName": "Tier"
+                    "displayName": "Tier",
+                    "title": "Tier",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "category",
-                    "displayName": "Category"
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "title",
-                    "displayName": "Pattern"
+                    "displayName": "Check",
+                    "title": "Check",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "reason",
-                    "displayName": "Why Not Measured"
+                    "displayName": "Why Not Measured",
+                    "title": "Why Not Measured",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   }
                 ]
               },
               "frame": {
                 "showTitle": true,
-                "title": "Unmeasured Patterns",
+                "title": "Checks Without a Result",
                 "showDescription": true,
-                "description": "Ranked by severity \u2014 the CRITICAL rows are the most important things this assessment cannot currently tell you."
+                "description": "Ranked by severity - the CRITICAL rows matter most."
               }
             }
           },

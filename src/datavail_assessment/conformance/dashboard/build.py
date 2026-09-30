@@ -9,9 +9,14 @@ Writes conformance_assessment.lvdash.json beside this file. The bundle
 deploys it as the "Conformance Assessment" dashboard.
 
 Scoring shown here is deliberately two-dimensional: every score is
-paired with the coverage it was computed from, and a category whose
-coverage is below the floor is graded INSUFFICIENT DATA rather than
-given a number that would imply more confidence than exists.
+paired with the coverage it was computed from. The grade describes the
+score; coverage is reported beside it as its own number rather than
+overriding it. Grading a real score INSUFFICIENT DATA contradicted the
+score printed next to it - if a number is worth showing, it is worth
+grading, and the reader judges it against the coverage.
+
+Only a category with nothing measured at all reads NOT AVAILABLE, because
+there is genuinely no score to grade.
 """
 
 from __future__ import annotations
@@ -56,7 +61,7 @@ SELECT
   s.n_not_applicable,
   s.n_patterns,
   CASE
-    WHEN s.coverage_pct < {MIN_COVERAGE} THEN 'INSUFFICIENT DATA'
+    WHEN s.overall_score IS NULL THEN 'NOT AVAILABLE'
     WHEN s.overall_score >= {GOOD} THEN 'GOOD'
     WHEN s.overall_score >= {FAIR} THEN 'FAIR'
     ELSE 'POOR'
@@ -79,7 +84,7 @@ SELECT
   n_not_applicable,
   n_poor,
   CASE
-    WHEN coverage_pct < {MIN_COVERAGE} THEN 'INSUFFICIENT DATA'
+    WHEN weighted_score IS NULL THEN 'NOT AVAILABLE'
     WHEN weighted_score >= {GOOD} THEN 'GOOD'
     WHEN weighted_score >= {FAIR} THEN 'FAIR'
     ELSE 'POOR'
@@ -196,11 +201,18 @@ def q(dataset: str, fields: list[str]) -> list[dict]:
 
 
 def counter(name, dataset, field, title, desc, x, y, w=3, h=4) -> dict:
+    """`desc` may be empty - a tile whose title already says everything
+    reads better without a subtitle restating it."""
+    frame = {"showTitle": True, "title": title}
+    if desc:
+        frame["showDescription"] = True
+        frame["description"] = desc
+    else:
+        frame["showDescription"] = False
     return {"widget": {"name": name, "queries": q(dataset, [field]),
                        "spec": {"version": 2, "widgetType": "counter",
                                 "encodings": {"value": {"fieldName": field, "displayName": title}},
-                                "frame": {"showTitle": True, "title": title,
-                                          "showDescription": True, "description": desc}}},
+                                "frame": frame}},
             "position": {"x": x, "y": y, "width": w, "height": h}}
 
 
@@ -220,11 +232,41 @@ def bar(name, dataset, xf, yf, colorf, mappings, title, desc, x, y, w, h,
             "position": {"x": x, "y": y, "width": w, "height": h}}
 
 
+# Numeric columns, so tables can right-align them. Lakeview left-aligns
+# every column by default, which leaves digits ragged under a header and
+# makes columns of different magnitudes hard to compare down the page.
+_NUMERIC = {
+    "score", "coverage_pct", "conformance_pct", "weighted_score",
+    "n_measured", "n_not_available", "n_not_applicable", "n_poor",
+    "n_patterns", "n_error", "finding_count", "metric_value",
+    "critical_gaps", "overall_score",
+}
+
+# Counts are whole numbers; percentages and scores carry one decimal.
+_INTEGER = {"n_measured", "n_not_available", "n_not_applicable", "n_poor",
+            "n_patterns", "n_error", "finding_count", "critical_gaps"}
+
+
+def _column(field: str, label: str, order: int) -> dict:
+    numeric = field in _NUMERIC
+    col = {"fieldName": field, "displayName": label, "title": label,
+           "order": order, "visible": True,
+           "alignContent": "right" if numeric else "left"}
+    if numeric:
+        col["type"] = "integer" if field in _INTEGER else "float"
+        col["displayAs"] = "number"
+        col["numberFormat"] = "0" if field in _INTEGER else "0.0"
+    else:
+        col["type"] = "string"
+        col["displayAs"] = "string"
+    return col
+
+
 def table(name, dataset, cols, title, desc, x, y, w, h) -> dict:
     return {"widget": {"name": name, "queries": q(dataset, [c[0] for c in cols]),
                        "spec": {"version": 2, "widgetType": "table",
                                 "encodings": {"columns": [
-                                    {"fieldName": c[0], "displayName": c[1]} for c in cols]},
+                                    _column(c[0], c[1], i) for i, c in enumerate(cols)]},
                                 "frame": {"showTitle": True, "title": title,
                                           "showDescription": True, "description": desc}}},
             "position": {"x": x, "y": y, "width": w, "height": h}}
@@ -243,7 +285,7 @@ def pie(name, dataset, colorf, anglef, mappings, title, desc, x, y, w, h) -> dic
 
 
 GRADE_COLORS = [{"value": "GOOD", "color": GREEN}, {"value": "FAIR", "color": AMBER},
-                {"value": "POOR", "color": RED}, {"value": "INSUFFICIENT DATA", "color": GREY}]
+                {"value": "POOR", "color": RED}, {"value": "NOT AVAILABLE", "color": GREY}]
 STATUS_COLORS = [{"value": "MEASURED", "color": GREEN},
                  {"value": "NOT_AVAILABLE", "color": GREY},
                  {"value": "NOT_APPLICABLE", "color": "#64748B"},
@@ -255,36 +297,45 @@ def build(catalog: str, schema: str) -> dict:
         text("p1_title", [
             "# Conformance Assessment",
             "",
-            "How closely this workspace follows documented Databricks practice, measured from "
-            "Unity Catalog system tables against the pattern library.",
+            "**Of the things this workspace does, how well does it do them?**",
             "",
-            "**Read the score with the coverage.** Only checks that could actually be measured "
-            "contribute to a score. A category measured on thin evidence is graded "
-            "*INSUFFICIENT DATA* rather than given a misleading number.",
-        ], 0, 0, 6, 5),
+            "Two numbers, and they answer different questions:",
+            "",
+            "- **Score** - of the checks we ran, how closely the practice was followed.",
+            "- **Coverage** - how many of the checks we could run at all.",
+            "",
+            "**Low coverage is our gap, not the workspace's.** A check with no result is "
+            "one we could not run - some are not written yet, most need a source system "
+            "tables do not expose, or judgment a query cannot make. Low coverage means we "
+            "looked at less, not that the workspace did less.",
+            "",
+            "*NOT AVAILABLE* means nothing in that category could be measured.",
+        ], 0, 0, 6, 6),
         counter("kpi_score", "ds_overall", "overall_score", "Conformance Score",
-                "Weighted mean conformance across measured checks (0-100)", 6, 0, 3, 5),
+                "Severity-weighted % across measured checks", 6, 0, 3, 5),
         counter("kpi_coverage", "ds_overall", "coverage_pct", "Measurement Coverage",
-                "Share of applicable weight that could be measured", 9, 0, 3, 5),
+                "Severity-weighted % of all checks we could run", 9, 0, 3, 5),
         counter("kpi_grade", "ds_overall", "conformance_grade", "Overall Implementation",
-                f"GOOD >= {GOOD}, FAIR >= {FAIR}, else POOR", 0, 5, 3, 3),
+                "", 0, 5, 3, 3),
         counter("kpi_critical", "ds_overall", "critical_gaps", "Critical Gaps",
                 "CRITICAL-severity checks graded POOR", 3, 5, 3, 3),
         counter("kpi_measured", "ds_overall", "n_measured", "Checks Measured",
-                "Patterns that produced a percentage", 6, 5, 3, 3),
-        counter("kpi_unavailable", "ds_overall", "n_not_available", "Not Measurable",
-                "Patterns with no obtainable data this run", 9, 5, 3, 3),
+                "Checks that produced a score", 6, 5, 3, 3),
+        counter("kpi_unavailable", "ds_overall", "n_not_available", "Checks Not Available",
+                "Mostly practices with no check written yet; a few ran and found "
+                "no data. Coverage page has the split.", 9, 5, 3, 3),
         bar("cat_score_bars", "ds_category", "score", "category", "implementation",
             GRADE_COLORS, "Implementation by Category",
             "Weighted conformance per category, coloured by grade.", 0, 8, 6, 7),
         bar("cat_coverage_bars", "ds_category", "coverage_pct", "category", None, None,
             "Measurement Coverage by Category",
-            f"Share of each category actually measured. Below {MIN_COVERAGE}% the score is not "
-            "trustworthy and the grade reads INSUFFICIENT DATA.", 6, 8, 6, 7),
+            f"Severity-weighted %. Below {MIN_COVERAGE}%, read the score as "
+            f"indicative.", 6, 8, 6, 7),
         table("cat_table", "ds_category",
               [("category", "Category"), ("implementation", "Implementation"),
-               ("score", "Score"), ("coverage_pct", "Coverage %"),
-               ("n_measured", "Measured"), ("n_not_available", "Not Available"),
+               ("score", "Score"), ("coverage_pct", "Measurement Coverage"),
+               ("n_measured", "Checks Measured"),
+               ("n_not_available", "Checks Not Available"),
                ("n_poor", "Poor")],
               "Category Scorecard",
               "Every category with its grade, score, and how much of it was visible.",
@@ -295,24 +346,23 @@ def build(catalog: str, schema: str) -> dict:
         text("p2_title", [
             "## Findings and Remediation",
             "",
-            "Checks that produced a measurement, worst first. Severity is the pattern's rank in "
-            "the registry; grade compares the measured conformance against that pattern's own "
-            "target and floor.",
+            "Checks that produced a measurement, worst first. Grade compares the result "
+            "against that check's own target and floor.",
         ], 0, 0, 12, 3),
         table("gaps_table", "ds_gaps",
-              [("severity", "Severity"), ("category", "Category"), ("title", "Pattern"),
+              [("severity", "Severity"), ("category", "Category"), ("title", "Check"),
                ("conformance_pct", "Conformance %"), ("grade", "Grade"),
                ("coverage_detail", "Objects"), ("finding_count", "Evidence Rows"),
-               ("doc_path", "Pattern Doc")],
+               ("doc_path", "Reference")],
               "Priority Remediation List",
               "Measured checks graded POOR or FAIR, ordered by severity then conformance.",
               0, 3, 12, 10),
         bar("checks_bars", "ds_checks", "conformance_pct", "title", "grade", GRADE_COLORS,
-            "Conformance by Pattern",
+            "Conformance by Check",
             "All measured checks. Bars near zero are the practices not being followed at all.",
             0, 13, 12, 11),
         table("evidence_table", "ds_findings",
-              [("severity", "Severity"), ("category", "Category"), ("pattern_id", "Pattern"),
+              [("severity", "Severity"), ("category", "Category"), ("pattern_id", "Check"),
                ("object_type", "Type"), ("object_name", "Object"), ("owner", "Owner"),
                ("metric_name", "Metric"), ("metric_value", "Value")],
               "Evidence",
@@ -324,25 +374,23 @@ def build(catalog: str, schema: str) -> dict:
         text("p3_title", [
             "## Coverage and Blind Spots",
             "",
-            "What this assessment could **not** see, and why. Every unmeasured pattern carries a "
-            "reason: a system schema that is not enabled, a missing grant, a renamed column, or a "
-            "check tier that needs an API this collector does not call.",
+            "What this assessment could **not** see, and why. Every check without a result "
+            "carries a reason: a system schema that is not enabled, a missing grant, a renamed "
+            "column, or a tier needing an API this collector does not call.",
             "",
             "This page exists so the headline score is never mistaken for a complete review.",
         ], 0, 0, 12, 4),
         pie("status_pie", "ds_status", "status", "n_patterns", STATUS_COLORS,
-            "Measurement Status", "How the pattern library resolved against this workspace.",
+            "Measurement Status", "How every check resolved against this workspace.",
             0, 4, 4, 7),
         bar("tier_bars", "ds_tier", "n_patterns", "check_tier", None, None,
-            "Patterns by Check Tier",
-            "SYSTEM_TABLE is implemented. WORKSPACE_API, ACCOUNT_API, TABLE_DETAIL and MANUAL "
-            "tiers need collectors that do not exist yet.", 4, 4, 8, 7),
+            "Checks by Tier",
+            "Why each check without a result has none.", 4, 4, 8, 7),
         table("blindspot_table", "ds_blindspots",
               [("severity", "Severity"), ("check_tier", "Tier"), ("category", "Category"),
-               ("title", "Pattern"), ("reason", "Why Not Measured")],
-              "Unmeasured Patterns",
-              "Ranked by severity — the CRITICAL rows are the most important things this "
-              "assessment cannot currently tell you.",
+               ("title", "Check"), ("reason", "Why Not Measured")],
+              "Checks Without a Result",
+              "Ranked by severity - the CRITICAL rows matter most.",
               0, 11, 12, 11),
     ]
 
