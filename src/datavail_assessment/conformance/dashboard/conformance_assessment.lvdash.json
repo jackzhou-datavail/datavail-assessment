@@ -1117,13 +1117,8 @@
                     "order": 4,
                     "visible": true,
                     "alignContent": "left",
-                    "displayAs": "link",
                     "type": "string",
-                    "linkUrlTemplate": "{{ object_url }}",
-                    "linkTextTemplate": "{{ @ }}",
-                    "linkTitleTemplate": "{{ @ }}",
-                    "linkOpenInNewTab": true,
-                    "highlightLinks": true
+                    "displayAs": "string"
                   },
                   {
                     "fieldName": "owner",
@@ -1158,13 +1153,18 @@
                   },
                   {
                     "fieldName": "object_url",
-                    "displayName": "object_url",
-                    "title": "object_url",
+                    "displayName": "Open",
+                    "title": "Open",
                     "order": 8,
-                    "visible": false,
-                    "alignContent": "left",
+                    "visible": true,
+                    "alignContent": "center",
+                    "displayAs": "link",
                     "type": "string",
-                    "displayAs": "string"
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "open",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "highlightLinks": true
                   }
                 ]
               },
@@ -1172,7 +1172,7 @@
                 "showTitle": true,
                 "title": "Evidence",
                 "showDescription": true,
-                "description": "The specific objects behind each finding \u2014 the remediation worklist. Object links through to the table, job or experiment."
+                "description": "The specific objects behind each finding \u2014 the remediation worklist. Open goes straight to the table, job or experiment."
               }
             }
           },

@@ -271,7 +271,7 @@ _INTEGER = {"n_measured", "n_not_available", "n_not_applicable", "n_poor",
             "n_patterns", "n_error", "finding_count", "critical_gaps"}
 
 
-def _column(field: str, label: str, order: int, link_url: str | None = None,
+def _column(field: str, label: str, order: int, link_text: str | None = None,
             visible: bool = True) -> dict:
     """Numeric cells are centred, not right-aligned.
 
@@ -286,15 +286,18 @@ def _column(field: str, label: str, order: int, link_url: str | None = None,
     col = {"fieldName": field, "displayName": label, "title": label,
            "order": order, "visible": visible,
            "alignContent": "center" if numeric else "left"}
-    if link_url:
-        # {{ @ }} is this cell's own value; {{ other }} reads another
-        # column of the same row, which is why the URL column has to be
-        # fetched even though it is hidden.
+    if link_text:
+        # This column's own value IS the URL. {{ @ }} is the only
+        # template Lakeview resolves - a cross-column {{ other }} does
+        # not substitute, and the cell renders as inert text instead of
+        # a link. So the URL lives in the displayed column and the label
+        # is a literal, rather than the URL living in a hidden column.
         col.update({"displayAs": "link", "type": "string",
-                    "linkUrlTemplate": "{{ " + link_url + " }}",
-                    "linkTextTemplate": "{{ @ }}",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": link_text,
                     "linkTitleTemplate": "{{ @ }}",
-                    "linkOpenInNewTab": True, "highlightLinks": True})
+                    "linkOpenInNewTab": True, "highlightLinks": True,
+                    "alignContent": "center"})
         return col
     if numeric:
         col["type"] = "integer" if field in _INTEGER else "float"
@@ -306,18 +309,16 @@ def _column(field: str, label: str, order: int, link_url: str | None = None,
     return col
 
 
-def table(name, dataset, cols, title, desc, x, y, w, h,
-          link_urls=None, hidden=()) -> dict:
-    """`link_urls` maps a column to the column holding its URL; `hidden`
-    names columns fetched for those templates but not displayed."""
-    link_urls = link_urls or {}
-    all_cols = list(cols) + [(h_, h_) for h_ in hidden]
+def table(name, dataset, cols, title, desc, x, y, w, h, link_cols=None) -> dict:
+    """`link_cols` maps a column holding a URL to the label its cells
+    should show, e.g. {"object_url": "open"}."""
+    link_cols = link_cols or {}
+    all_cols = list(cols)
     return {"widget": {"name": name, "queries": q(dataset, [c[0] for c in all_cols]),
                        "spec": {"version": 2, "widgetType": "table",
                                 "encodings": {"columns": [
                                     _column(c[0], c[1], i,
-                                            link_url=link_urls.get(c[0]),
-                                            visible=c[0] not in hidden)
+                                            link_text=link_cols.get(c[0]))
                                     for i, c in enumerate(all_cols)]},
                                 "frame": {"showTitle": True, "title": title,
                                           "showDescription": True, "description": desc}}},
@@ -424,12 +425,13 @@ def build(catalog: str, schema: str, link_base: str = "",
         table("evidence_table", "ds_findings",
               [("severity", "Severity"), ("category", "Category"), ("pattern_id", "Check"),
                ("object_type", "Type"), ("object_name", "Object"), ("owner", "Owner"),
-               ("metric_name", "Metric"), ("metric_value", "Value")],
+               ("metric_name", "Metric"), ("metric_value", "Value"),
+               ("object_url", "Open")],
               "Evidence",
               "The specific objects behind each finding — the remediation worklist. "
-              "Object links through to the table, job or experiment.",
+              "Open goes straight to the table, job or experiment.",
               0, 24, 12, 10,
-              link_urls={"object_name": "object_url"}, hidden=("object_url",)),
+              link_cols={"object_url": "open"}),
     ]
 
     page3 = [
