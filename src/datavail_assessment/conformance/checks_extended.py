@@ -636,3 +636,137 @@ def register(check, BRONZE_RX, GOLD_RX, EMAIL_RX) -> None:
             LIMIT 500
         """,
     )
+
+    # ------------------------------------------------------------------
+    # Wave 5 - filed WORKSPACE_API in the registry, but measurable from
+    # system tables after all. Job settings are in system.lakeflow.jobs;
+    # only notification routing needs the Jobs API.
+    # ------------------------------------------------------------------
+
+    check(
+        "unbounded-task-execution",
+        unit="jobs",
+        requires={"system.lakeflow.jobs":
+                  ["job_id", "timeout_seconds", "health_rules", "change_time", "delete_time"]},
+        note=("Conforming = the job has a bound of some kind: a timeout, or a "
+              "duration health rule. health_rules is an array and arrives as an "
+              "empty array rather than NULL, so emptiness is size() = 0 - IS NOT "
+              "NULL would pass every job."),
+        measure="""
+            WITH latest AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS name,
+                     MAX_BY(timeout_seconds, change_time) AS timeout_seconds,
+                     MAX_BY(health_rules, change_time) AS health_rules,
+                     MAX_BY(run_as_user_name, change_time) AS run_as_user_name,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.jobs GROUP BY job_id
+            )
+            SELECT
+              COUNT_IF(COALESCE(timeout_seconds, 0) > 0
+                       OR size(COALESCE(health_rules, array())) > 0) AS numerator,
+              COUNT(*) AS denominator
+            FROM latest WHERE delete_time IS NULL
+        """,
+        findings="""
+            WITH latest AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS name,
+                     MAX_BY(timeout_seconds, change_time) AS timeout_seconds,
+                     MAX_BY(health_rules, change_time) AS health_rules,
+                     MAX_BY(run_as_user_name, change_time) AS run_as_user_name,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.jobs GROUP BY job_id
+            )
+            SELECT 'JOB' AS object_type, CAST(job_id AS STRING) AS object_id,
+                   name AS object_name, run_as_user_name AS owner,
+                   'no_timeout_or_duration_rule' AS metric_name, 1.0 AS metric_value
+            FROM latest
+            WHERE delete_time IS NULL
+              AND COALESCE(timeout_seconds, 0) = 0
+              AND size(COALESCE(health_rules, array())) = 0
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "git-backed-development-and-cicd",
+        unit="jobs",
+        requires={"system.lakeflow.jobs":
+                  ["job_id", "deployment", "change_time", "delete_time"]},
+        note=("Conforming = the job was deployed from a bundle, which only happens "
+              "when its definition lives in source control. A job created in the UI "
+              "has no deployment and exists only in the workspace."),
+        measure="""
+            WITH latest AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS name,
+                     MAX_BY(deployment, change_time) AS deployment,
+                     MAX_BY(run_as_user_name, change_time) AS run_as_user_name,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.jobs GROUP BY job_id
+            )
+            SELECT COUNT_IF(deployment IS NOT NULL) AS numerator, COUNT(*) AS denominator
+            FROM latest WHERE delete_time IS NULL
+        """,
+        findings="""
+            WITH latest AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS name,
+                     MAX_BY(deployment, change_time) AS deployment,
+                     MAX_BY(run_as_user_name, change_time) AS run_as_user_name,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.jobs GROUP BY job_id
+            )
+            SELECT 'JOB' AS object_type, CAST(job_id AS STRING) AS object_id,
+                   name AS object_name, run_as_user_name AS owner,
+                   'not_bundle_deployed' AS metric_name, 1.0 AS metric_value
+            FROM latest WHERE delete_time IS NULL AND deployment IS NULL
+            LIMIT 500
+        """,
+    )
+
+    check(
+        "retries-and-timeouts-on-every-task",
+        unit="job tasks",
+        requires={"system.lakeflow.job_tasks":
+                  ["job_id", "task_key", "timeout_seconds", "health_rules",
+                   "change_time", "delete_time"]},
+        note=("Per TASK, not per job - a job-level bound does not stop one task "
+              "hanging. Conforming = the task has a timeout or a duration health "
+              "rule. RETRIES are not in system tables and are NOT covered here; "
+              "that half needs the Jobs API."),
+        measure="""
+            WITH latest AS (
+              SELECT job_id, task_key,
+                     MAX_BY(timeout_seconds, change_time) AS timeout_seconds,
+                     MAX_BY(health_rules, change_time) AS health_rules,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.job_tasks GROUP BY job_id, task_key
+            )
+            SELECT
+              COUNT_IF(COALESCE(timeout_seconds, 0) > 0
+                       OR size(COALESCE(health_rules, array())) > 0) AS numerator,
+              COUNT(*) AS denominator
+            FROM latest WHERE delete_time IS NULL
+        """,
+        findings="""
+            WITH latest AS (
+              SELECT job_id, task_key,
+                     MAX_BY(timeout_seconds, change_time) AS timeout_seconds,
+                     MAX_BY(health_rules, change_time) AS health_rules,
+                     MAX_BY(delete_time, change_time) AS delete_time
+              FROM system.lakeflow.job_tasks GROUP BY job_id, task_key
+            )
+            SELECT 'JOB_TASK' AS object_type,
+                   CONCAT(CAST(job_id AS STRING), ':', task_key) AS object_id,
+                   CONCAT('job ', CAST(job_id AS STRING), ' task ', task_key) AS object_name,
+                   NULL AS owner,
+                   'no_task_timeout' AS metric_name, 1.0 AS metric_value
+            FROM latest
+            WHERE delete_time IS NULL
+              AND COALESCE(timeout_seconds, 0) = 0
+              AND size(COALESCE(health_rules, array())) = 0
+            LIMIT 500
+        """,
+    )

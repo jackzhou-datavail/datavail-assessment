@@ -22,6 +22,7 @@ labelled as such in the pattern's `reason`/detail so a reader does not
 mistake them for exact measurements.
 """
 
+from . import grants as gr
 from . import table_detail as td
 
 # Regexes used across checks to classify objects by naming convention.
@@ -908,4 +909,6 @@ PY_CHECKS = {
     "deletion-vectors-for-fast-dml": ("tables", td.check_deletion_vectors),
     "unmanaged-vacuum-retention": ("tables", td.check_vacuum_retention),
     "data-retention-policies": ("tables", td.check_retention_policy),
+    "individual-user-grants": ("grants", gr.check_individual_user_grants),
+    "group-based-access-control": ("principals", gr.check_group_based_access_control),
 }

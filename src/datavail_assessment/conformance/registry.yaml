@@ -34,8 +34,8 @@ patterns:
   # --- Unity Catalog governance -------------------------------------
   - {id: unowned-catalog-objects,        cat: unity-catalog-governance, sev: CRITICAL, tier: SYSTEM_TABLE,  impl: true,  target: 95, floor: 70, applies: ALWAYS, cause: ownership}
   - {id: legacy-hive-metastore-usage,    cat: unity-catalog-governance, sev: HIGH, tier: SYSTEM_TABLE,  impl: true,  target: 100, floor: 90, applies: ALWAYS, cause: legacy-platform}
-  - {id: individual-user-grants,         cat: unity-catalog-governance, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: access-control}
-  - {id: group-based-access-control,     cat: unity-catalog-governance, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: access-control}
+  - {id: individual-user-grants,         cat: unity-catalog-governance, sev: HIGH, tier: WORKSPACE_API, impl: true , target: 95, floor: 75, applies: ALWAYS, cause: access-control}
+  - {id: group-based-access-control,     cat: unity-catalog-governance, sev: HIGH, tier: WORKSPACE_API, impl: true , target: 95, floor: 75, applies: ALWAYS, cause: access-control}
   - {id: unclassified-sensitive-data,    cat: unity-catalog-governance, sev: CRITICAL,     tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: data-protection}
   - {id: automated-pii-classification,   cat: unity-catalog-governance, sev: HIGH,     tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: data-protection}
   - {id: lineage-and-audit-via-system-tables, cat: unity-catalog-governance, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 100, floor: 70, applies: ALWAYS, cause: observability}
@@ -75,7 +75,7 @@ patterns:
   - {id: observability-from-system-tables, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 100, floor: 70, applies: ALWAYS, cause: observability}
   - {id: infrastructure-as-code-terraform-and-bundles, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 50, applies: ALWAYS, cause: iac}
   - {id: manually-configured-workspaces, cat: platform-onboarding, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true,  target: 90, floor: 50, applies: ALWAYS, cause: iac}
-  - {id: git-backed-development-and-cicd, cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: version-control}
+  - {id: git-backed-development-and-cicd, cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: true , target: 95, floor: 70, applies: ALWAYS, cause: version-control}
   - {id: notebooks-as-production-code,   cat: platform-onboarding, sev: MEDIUM, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: version-control}
   - {id: environment-based-workspace-strategy, cat: platform-onboarding, sev: HIGH, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: workspace-topology}
   - {id: workspace-sprawl,               cat: platform-onboarding, sev: LOW, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: IF_MULTI_WORKSPACE, cause: workspace-topology}
@@ -110,8 +110,8 @@ patterns:
   - {id: task-dependencies-over-schedule-chaining, cat: orchestration-reliability, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true, target: 90, floor: 60, applies: ALWAYS, cause: job-structure}
   - {id: schedule-chained-jobs,          cat: orchestration-reliability, sev: HIGH, tier: SYSTEM_TABLE,  impl: true,  target: 90, floor: 60, applies: ALWAYS, cause: job-structure}
   - {id: monolithic-single-task-jobs,    cat: orchestration-reliability, sev: MEDIUM, tier: SYSTEM_TABLE,  impl: true,  target: 80, floor: 50, applies: ALWAYS, cause: job-structure}
-  - {id: retries-and-timeouts-on-every-task, cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
-  - {id: unbounded-task-execution,       cat: orchestration-reliability, sev: MEDIUM, tier: WORKSPACE_API, impl: false, target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
+  - {id: retries-and-timeouts-on-every-task, cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: true , target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
+  - {id: unbounded-task-execution,       cat: orchestration-reliability, sev: MEDIUM, tier: WORKSPACE_API, impl: true , target: 95, floor: 70, applies: ALWAYS, cause: job-resilience}
   - {id: failure-notifications-and-duration-thresholds, cat: orchestration-reliability, sev: CRITICAL, tier: WORKSPACE_API, impl: false, target: 95, floor: 75, applies: ALWAYS, cause: job-reliability}
   - {id: pipeline-expectations-for-data-quality, cat: orchestration-reliability, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 80, floor: 40, applies: IF_STREAMING, cause: data-quality}
   - {id: separate-ingestion-and-transformation-pipelines, cat: orchestration-reliability, sev: LOW, tier: SYSTEM_TABLE, impl: true , target: 85, floor: 50, applies: IF_STREAMING, cause: job-structure}
