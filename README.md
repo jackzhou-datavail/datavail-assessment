@@ -114,6 +114,7 @@ Adding a page is a module under `dashboard/pages/` supplying
 
 ## Further reading
 
+- [DESIGN.md](DESIGN.md) — what starts a collection, how a run resolves one check, and what the two assessments actually share
 - [src/datavail_assessment/conformance/README.md](src/datavail_assessment/conformance/README.md) — check tiers, what is and is not measurable, known approximations
 - [src/datavail_assessment/adoption/README.md](src/datavail_assessment/adoption/README.md) — scoring model and how the checks were derived
 - [patterns/README.md](patterns/README.md) — the pattern library index
