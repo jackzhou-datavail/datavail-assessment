@@ -41,8 +41,15 @@ def latest(catalog: str, schema: str) -> str:
     )
 
 
-def datasets(catalog: str, schema: str) -> list[dict]:
+def datasets(catalog: str, schema: str, link_base: str = "",
+             org_id: str = "") -> list[dict]:
     base = f"{catalog}.{schema}"
+    # Absolute console links when the workspace is known, relative
+    # otherwise. `?o=<workspace_id>` is what disambiguates the workspace
+    # for anyone whose account has more than one; without it the link
+    # can land in the wrong workspace.
+    lb = link_base.rstrip("/")
+    oq = f"?o={org_id}" if org_id else ""
     run = latest(catalog, schema)
 
     def ds(name: str, display: str, sql: str) -> dict:
@@ -145,16 +152,16 @@ SELECT
   -- plain text rather than a link to nowhere.
   CASE
     WHEN f.object_type IN ('TABLE', 'VIEW') AND size(split(f.object_id, '[.]')) = 3
-      THEN concat('/explore/data/', replace(f.object_id, '.', '/'))
+      THEN concat('{lb}/explore/data/', replace(f.object_id, '.', '/'), '{oq}')
     WHEN f.object_type = 'COLUMN' AND size(split(f.object_id, '[.]')) >= 4
-      THEN concat('/explore/data/',
-                  array_join(slice(split(f.object_id, '[.]'), 1, 3), '/'))
-    WHEN f.object_type = 'JOB'          THEN concat('/jobs/', f.object_id)
-    WHEN f.object_type = 'JOB_TASK'     THEN concat('/jobs/', split(f.object_id, ':')[0])
-    WHEN f.object_type = 'JOB_RUN'      THEN concat('/jobs/runs/', f.object_id)
-    WHEN f.object_type = 'EXPERIMENT'   THEN concat('/ml/experiments/', f.object_id)
-    WHEN f.object_type = 'CLUSTER'      THEN concat('/compute/clusters/', f.object_id)
-    WHEN f.object_type = 'PIPELINE'     THEN concat('/pipelines/', f.object_id)
+      THEN concat('{lb}/explore/data/',
+                  array_join(slice(split(f.object_id, '[.]'), 1, 3), '/'), '{oq}')
+    WHEN f.object_type = 'JOB'        THEN concat('{lb}/jobs/', f.object_id, '{oq}')
+    WHEN f.object_type = 'JOB_TASK'   THEN concat('{lb}/jobs/', split(f.object_id, ':')[0], '{oq}')
+    WHEN f.object_type = 'JOB_RUN'    THEN concat('{lb}/jobs/runs/', f.object_id, '{oq}')
+    WHEN f.object_type = 'EXPERIMENT' THEN concat('{lb}/ml/experiments/', f.object_id, '{oq}')
+    WHEN f.object_type = 'CLUSTER'    THEN concat('{lb}/compute/clusters/', f.object_id, '{oq}')
+    WHEN f.object_type = 'PIPELINE'   THEN concat('{lb}/pipelines/', f.object_id, '{oq}')
     ELSE NULL
   END AS object_url
 FROM {base}.check_finding f
@@ -337,7 +344,8 @@ STATUS_COLORS = [{"value": "MEASURED", "color": GREEN},
                  {"value": "ERROR", "color": RED}]
 
 
-def build(catalog: str, schema: str) -> dict:
+def build(catalog: str, schema: str, link_base: str = "",
+          org_id: str = "") -> dict:
     page1 = [
         text("p1_title", [
             "# Conformance Assessment",
@@ -449,7 +457,7 @@ def build(catalog: str, schema: str) -> dict:
     ]
 
     return {
-        "datasets": datasets(catalog, schema),
+        "datasets": datasets(catalog, schema, link_base, org_id),
         "pages": [
             {"name": "scorecard", "displayName": "Conformance: Scorecard", "layout": page1},
             {"name": "findings", "displayName": "Conformance: Findings", "layout": page2},
@@ -464,9 +472,23 @@ def main() -> int:
     ap.add_argument("--results-catalog", default=os.environ.get("ASSESSMENT_RESULTS_CATALOG", "assessment"))
     ap.add_argument("--results-schema", default=os.environ.get("ASSESSMENT_RESULTS_SCHEMA", "results"))
     ap.add_argument("--out", default=os.path.join(HERE, "conformance_assessment.lvdash.json"))
+    # Baked into the JSON at build time: the dashboard's own SQL has no
+    # way to learn its host or workspace id. Regenerating for another
+    # workspace means passing these again, or the Evidence links will
+    # point at this one.
+    ap.add_argument("--workspace-url",
+                    default=os.environ.get("ASSESSMENT_WORKSPACE_URL",
+                                           os.environ.get("DATABRICKS_HOST", "")),
+                    help="e.g. https://dbc-xxxx.cloud.databricks.com. Omitted, "
+                         "Evidence links are workspace-relative.")
+    ap.add_argument("--org-id", default=os.environ.get("ASSESSMENT_ORG_ID", ""),
+                    help="Workspace id for the ?o= parameter. Find it with: SELECT "
+                         "workspace_id FROM system.compute.warehouses WHERE "
+                         "warehouse_id = '<id>'")
     args = ap.parse_args()
 
-    dash = build(args.results_catalog, args.results_schema)
+    dash = build(args.results_catalog, args.results_schema,
+                 args.workspace_url, args.org_id)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(dash, fh, indent=2)
     n_widgets = sum(len(p["layout"]) for p in dash["pages"])
