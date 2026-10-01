@@ -24,6 +24,24 @@ def score(items: list[Scorable], outcomes: dict[str, Outcome], facts: dict[str, 
     Scores are the weighted mean conformance over MEASURED checks only.
     Coverage is measured weight over applicable weight, so a high score
     on thin evidence is always visible as such.
+
+    Three outcomes, deliberately not two:
+
+    MEASURED        produced a number; counts in both numerator and
+                    denominator.
+    NOT_AVAILABLE   relevant here, but we could not look - no collector,
+                    no account access, a system table missing a column.
+                    Denominator only, which is what drags coverage down
+                    and is the honest signal.
+    NOT_APPLICABLE  nothing in scope to judge - the workspace does not
+                    share data, has no clusters, has no table large
+                    enough for compaction to matter. Excluded from both,
+                    because a pattern with nothing to apply to is not a
+                    gap in our measurement.
+
+    Every pattern in the library came from Databricks' own guidance, so
+    NOT_APPLICABLE never means the practice is irrelevant - only that
+    this workspace currently has nothing it would govern.
     """
     by_cat: dict[str, dict[str, float]] = {}
     tot_app = tot_meas = tot_weighted = 0.0
@@ -37,14 +55,27 @@ def score(items: list[Scorable], outcomes: dict[str, Outcome], facts: dict[str, 
             {"w_app": 0.0, "w_meas": 0.0, "weighted": 0.0,
              MEASURED: 0.0, NOT_AVAILABLE: 0.0, NOT_APPLICABLE: 0.0, ERROR: 0.0, "poor": 0.0},
         )
-        if not applicable(p, facts):
+        status = out.status if out else NOT_AVAILABLE
+
+        # NOT_APPLICABLE leaves the denominator entirely, however it was
+        # reached - whether the registry's `applies` rule ruled the
+        # pattern out up front, or the check ran and found nothing in
+        # scope. Both mean the same thing: there is nothing here that
+        # could be right or wrong, so there is nothing we failed to see.
+        #
+        # This is NOT the same as a credential or capability limit. A
+        # pattern we cannot look at - no account access, no collector
+        # written, a system table missing a column - is NOT_AVAILABLE and
+        # stays in the denominator, because the practice is relevant and
+        # we simply did not measure it. Coverage exists to report exactly
+        # that gap, so hiding it would defeat the number.
+        if not applicable(p, facts) or status == NOT_APPLICABLE:
             cat[NOT_APPLICABLE] += 1
             n[NOT_APPLICABLE] += 1
             continue
         cat["w_app"] += p.weight
         tot_app += p.weight
         if out is None or out.status != MEASURED:
-            status = out.status if out else NOT_AVAILABLE
             cat[status] += 1
             n[status] += 1
             continue

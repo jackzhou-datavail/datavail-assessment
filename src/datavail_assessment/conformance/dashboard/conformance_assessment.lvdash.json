@@ -172,14 +172,16 @@
                 "\n",
                 "**Of the things this workspace does, how well does it do them?**\n",
                 "\n",
-                "Two numbers, and they answer different questions:\n",
-                "\n",
                 "- **Score** - of the checks we ran, how closely the practice was followed.\n",
                 "- **Coverage** - how many of the checks we could run at all.\n",
                 "\n",
-                "**Low coverage is our gap, not the workspace's.** A check with no result is one we could not run - some are not written yet, most need a source system tables do not expose, or judgment a query cannot make. Low coverage means we looked at less, not that the workspace did less.\n",
+                "**Low coverage is our gap, not the workspace's.** Three outcomes per check, and the difference between the last two matters:\n",
                 "\n",
-                "*NOT AVAILABLE* means nothing in that category could be measured.\n"
+                "- **Measured** - produced a number.\n",
+                "- **Not available** - relevant here, but we could not look: no check written, no account access, a system table missing a column. This is what pulls coverage down, and saying so is the point.\n",
+                "- **Nothing in scope** - no clusters, no shared data, no table large enough to compact. Excluded from coverage, because a practice with nothing to govern is not something we failed to measure.\n",
+                "\n",
+                "Every practice here comes from Databricks' own guidance, so *nothing in scope* never means the practice is irrelevant - only that this workspace has nothing it would apply to yet.\n"
               ]
             }
           },
@@ -187,7 +189,7 @@
             "x": 0,
             "y": 0,
             "width": 6,
-            "height": 6
+            "height": 8
           }
         },
         {
@@ -617,6 +619,10 @@
                       "expression": "`n_not_available`"
                     },
                     {
+                      "name": "n_not_applicable",
+                      "expression": "`n_not_applicable`"
+                    },
+                    {
                       "name": "n_poor",
                       "expression": "`n_poor`"
                     }
@@ -695,10 +701,21 @@
                     "numberFormat": "0"
                   },
                   {
+                    "fieldName": "n_not_applicable",
+                    "displayName": "Nothing In Scope",
+                    "title": "Nothing In Scope",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "right",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
                     "fieldName": "n_poor",
                     "displayName": "Poor",
                     "title": "Poor",
-                    "order": 6,
+                    "order": 7,
                     "visible": true,
                     "alignContent": "right",
                     "type": "integer",

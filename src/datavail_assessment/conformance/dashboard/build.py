@@ -299,18 +299,24 @@ def build(catalog: str, schema: str) -> dict:
             "",
             "**Of the things this workspace does, how well does it do them?**",
             "",
-            "Two numbers, and they answer different questions:",
-            "",
             "- **Score** - of the checks we ran, how closely the practice was followed.",
             "- **Coverage** - how many of the checks we could run at all.",
             "",
-            "**Low coverage is our gap, not the workspace's.** A check with no result is "
-            "one we could not run - some are not written yet, most need a source system "
-            "tables do not expose, or judgment a query cannot make. Low coverage means we "
-            "looked at less, not that the workspace did less.",
+            "**Low coverage is our gap, not the workspace's.** Three outcomes per "
+            "check, and the difference between the last two matters:",
             "",
-            "*NOT AVAILABLE* means nothing in that category could be measured.",
-        ], 0, 0, 6, 6),
+            "- **Measured** - produced a number.",
+            "- **Not available** - relevant here, but we could not look: no check "
+            "written, no account access, a system table missing a column. This is "
+            "what pulls coverage down, and saying so is the point.",
+            "- **Nothing in scope** - no clusters, no shared data, no table large "
+            "enough to compact. Excluded from coverage, because a practice with "
+            "nothing to govern is not something we failed to measure.",
+            "",
+            "Every practice here comes from Databricks' own guidance, so *nothing "
+            "in scope* never means the practice is irrelevant - only that this "
+            "workspace has nothing it would apply to yet.",
+        ], 0, 0, 6, 8),
         counter("kpi_score", "ds_overall", "overall_score", "Conformance Score",
                 "Severity-weighted % across measured checks", 6, 0, 3, 5),
         counter("kpi_coverage", "ds_overall", "coverage_pct", "Measurement Coverage",
@@ -336,6 +342,7 @@ def build(catalog: str, schema: str) -> dict:
                ("score", "Score"), ("coverage_pct", "Measurement Coverage"),
                ("n_measured", "Checks Measured"),
                ("n_not_available", "Checks Not Available"),
+               ("n_not_applicable", "Nothing In Scope"),
                ("n_poor", "Poor")],
               "Category Scorecard",
               "Every category with its grade, score, and how much of it was visible.",
