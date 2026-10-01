@@ -162,9 +162,10 @@ resources:
       file_path: ./src/datavail_assessment/dashboard/datavail_assessment.lvdash.json
       warehouse_id: ${var.warehouse_id}
 
-    # The three-page conformance dashboard. Regenerate with:
+    # The client-facing conformance dashboard: Scorecard and Findings.
+    # Regenerate with:
     #
-    #   python -m datavail_assessment.conformance.dashboard.build     #     --workspace-url https://<host> --org-id <workspace_id>
+    #   python -m datavail_assessment.conformance.dashboard.build     #     --pages scorecard,findings     #     --workspace-url https://<host> --org-id <workspace_id>
     #
     # Those two are baked into the JSON because the dashboard's own SQL
     # cannot learn its host or workspace id, and the Evidence table links
@@ -180,4 +181,17 @@ resources:
     conformance_assessment:
       display_name: "Conformance Assessment"
       file_path: ./src/datavail_assessment/conformance/dashboard/conformance_assessment.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+
+    # Internal only. Coverage & Blind Spots explains why checks could not
+    # run - missing collectors, unexposed sources, patterns with nothing
+    # to apply to. That is a conversation about this tool, not about the
+    # client's workspace, and explaining it costs more than it informs.
+    # Kept as a separate dashboard so the client-facing one need not
+    # carry it, and so it can be shared with a narrower audience.
+    #
+    #   python -m datavail_assessment.conformance.dashboard.build     #     --pages coverage --workspace-url https://<host> --org-id <id>     #     --out src/datavail_assessment/conformance/dashboard/conformance_internal.lvdash.json
+    conformance_internal:
+      display_name: "Conformance Assessment — Internal"
+      file_path: ./src/datavail_assessment/conformance/dashboard/conformance_internal.lvdash.json
       warehouse_id: ${var.warehouse_id}

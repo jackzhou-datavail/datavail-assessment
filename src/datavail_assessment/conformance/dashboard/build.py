@@ -377,7 +377,7 @@ STATUS_COLORS = [{"value": "MEASURED", "color": GREEN},
 
 
 def build(catalog: str, schema: str, link_base: str = "",
-          org_id: str = "") -> dict:
+          org_id: str = "", pages: tuple[str, ...] | None = None) -> dict:
     page1 = [
         text("p1_title", [
             "# Conformance Assessment",
@@ -387,21 +387,14 @@ def build(catalog: str, schema: str, link_base: str = "",
             "- **Score** - of the checks we ran, how closely the practice was followed.",
             "- **Coverage** - how many of the checks we could run at all.",
             "",
-            "**Low coverage is our gap, not the workspace's.** Three outcomes per "
-            "check, and the difference between the last two matters:",
+            "**Low coverage is our gap, not the workspace's.** A check with no "
+            "result is one we could not run - some are not written yet, others need "
+            "a source the platform does not expose, or judgment a query cannot make. "
+            "Low coverage means we looked at less, not that the workspace did less.",
             "",
-            "- **Measured** - produced a number.",
-            "- **Not available** - relevant here, but we could not look: no check "
-            "written, no account access, a system table missing a column. This is "
-            "what pulls coverage down, and saying so is the point.",
-            "- **Nothing in scope** - no clusters, no shared data, no table large "
-            "enough to compact. Excluded from coverage, because a practice with "
-            "nothing to govern is not something we failed to measure.",
-            "",
-            "Every practice here comes from Databricks' own guidance, so *nothing "
-            "in scope* never means the practice is irrelevant - only that this "
-            "workspace has nothing it would apply to yet.",
-        ], 0, 0, 6, 8),
+            "Practices with nothing to apply to - no clusters to size, no shared data "
+            "to govern - are left out of both numbers entirely.",
+        ], 0, 0, 6, 7),
         counter("kpi_score", "ds_overall", "overall_score", "Conformance Score",
                 "Severity-weighted % across measured checks", 6, 0, 3, 5),
         counter("kpi_coverage", "ds_overall", "coverage_pct", "Measurement Coverage",
@@ -427,7 +420,6 @@ def build(catalog: str, schema: str, link_base: str = "",
                ("score", "Score"), ("coverage_pct", "Measurement Coverage"),
                ("n_measured", "Checks Measured"),
                ("n_not_available", "Checks Not Available"),
-               ("n_not_applicable", "Nothing In Scope"),
                ("n_poor", "Poor")],
               "Category Scorecard",
               "Every category with its grade, score, and how much of it was visible.",
@@ -499,13 +491,27 @@ def build(catalog: str, schema: str, link_base: str = "",
               0, 11, 12, 11),
     ]
 
+    all_pages = [
+        {"name": "scorecard", "displayName": "Conformance: Scorecard", "layout": page1},
+        {"name": "findings", "displayName": "Conformance: Findings", "layout": page2},
+        {"name": "coverage", "displayName": "Conformance: Coverage & Blind Spots",
+         "layout": page3},
+    ]
+    kept = [pg for pg in all_pages if pages is None or pg["name"] in pages]
+    if not kept:
+        raise SystemExit("no pages selected; choose from: "
+                         + ", ".join(pg["name"] for pg in all_pages))
+
+    # Only the datasets the kept pages reference. Carrying the rest would
+    # make the dashboard run queries nothing displays.
+    used = {q["query"]["datasetName"]
+            for pg in kept for w in pg["layout"]
+            for q in w["widget"].get("queries", [])}
+
     return {
-        "datasets": datasets(catalog, schema, link_base, org_id),
-        "pages": [
-            {"name": "scorecard", "displayName": "Conformance: Scorecard", "layout": page1},
-            {"name": "findings", "displayName": "Conformance: Findings", "layout": page2},
-            {"name": "coverage", "displayName": "Conformance: Coverage & Blind Spots", "layout": page3},
-        ],
+        "datasets": [d for d in datasets(catalog, schema, link_base, org_id)
+                     if d["name"] in used],
+        "pages": kept,
         "uiSettings": {"theme": {"widgetHeaderAlignment": "LEFT"}},
     }
 
@@ -524,6 +530,13 @@ def main() -> int:
                                            os.environ.get("DATABRICKS_HOST", "")),
                     help="e.g. https://dbc-xxxx.cloud.databricks.com. Omitted, "
                          "Evidence links are workspace-relative.")
+    # Coverage & Blind Spots explains why checks could not run, which is
+    # a conversation about this tool rather than about the workspace. It
+    # ships as a separate internal dashboard so a client-facing one does
+    # not have to carry it.
+    ap.add_argument("--pages", default="scorecard,findings,coverage",
+                    help="comma-separated page names to include: "
+                         "scorecard, findings, coverage")
     ap.add_argument("--org-id", default=os.environ.get("ASSESSMENT_ORG_ID", ""),
                     help="Workspace id for the ?o= parameter. Find it with: SELECT "
                          "workspace_id FROM system.compute.warehouses WHERE "
@@ -531,7 +544,8 @@ def main() -> int:
     args = ap.parse_args()
 
     dash = build(args.results_catalog, args.results_schema,
-                 args.workspace_url, args.org_id)
+                 args.workspace_url, args.org_id,
+                 pages=tuple(x.strip() for x in args.pages.split(",") if x.strip()))
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(dash, fh, indent=2)
     n_widgets = sum(len(p["layout"]) for p in dash["pages"])
