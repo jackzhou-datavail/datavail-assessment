@@ -134,6 +134,8 @@ SELECT
   title,
   ROUND(conformance_pct, 1) AS conformance_pct,
   grade,
+  floor_pct,
+  target_pct,
   CONCAT(CAST(numerator AS STRING), ' / ', CAST(denominator AS STRING), ' ', unit) AS coverage_detail,
   finding_count,
   doc_path
@@ -277,12 +279,13 @@ _NUMERIC = {
     "score", "coverage_pct", "conformance_pct", "weighted_score",
     "n_measured", "n_not_available", "n_not_applicable", "n_poor",
     "n_patterns", "n_error", "finding_count", "metric_value",
-    "critical_gaps", "overall_score",
+    "critical_gaps", "overall_score", "floor_pct", "target_pct",
 }
 
 # Counts are whole numbers; percentages and scores carry one decimal.
 _INTEGER = {"n_measured", "n_not_available", "n_not_applicable", "n_poor",
-            "n_patterns", "n_error", "finding_count", "critical_gaps"}
+            "n_patterns", "n_error", "finding_count", "critical_gaps",
+            "floor_pct", "target_pct"}
 
 
 def _column(field: str, label: str, order: int, link_text: str | None = None,
@@ -426,17 +429,22 @@ def build(catalog: str, schema: str, link_base: str = "",
         ], 0, 0, 12, 3),
         table("gaps_table", "ds_gaps",
               [("severity", "Severity"), ("category", "Category"), ("title", "Check"),
-               ("conformance_pct", "Conformance %"), ("grade", "Grade"),
+               ("conformance_pct", "Conformance %"),
+               ("floor_pct", "Floor"), ("target_pct", "Target"), ("grade", "Grade"),
                ("coverage_detail", "Objects"), ("finding_count", "Evidence Rows"),
                ("doc_path", "Reference")],
               "Priority Remediation List",
-              "Measured checks graded POOR or FAIR, ordered by severity then conformance.",
+              "Measured checks graded POOR or FAIR, worst severity first. Floor and "
+              "Target are this check's own thresholds: below Floor is POOR, at or above "
+              "Target is GOOD. They differ per check, which is why a lower percentage "
+              "can carry a better grade.",
               0, 3, 12, 10),
         bar("checks_bars", "ds_checks", "conformance_pct", "title", "grade", GRADE_COLORS,
             f"{CHART_ROWS} Lowest-Scoring Checks",
-            "Worst first. Bars near zero are practices not being followed at all. "
-            "Every measured check is in the table above; this chart is bounded "
-            "because a taller one silently drops rows.",
+            "Worst first, coloured by grade. Each check has its own floor and target "
+            "(see the table above), so colour and length do not always agree. Every "
+            "measured check is in that table; this chart is bounded because a longer "
+            "one silently drops rows.",
             0, 13, 12, 14),
         table("evidence_table", "ds_findings",
               [("severity", "Severity"), ("category", "Category"), ("pattern_id", "Check"),

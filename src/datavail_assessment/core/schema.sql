@@ -162,6 +162,10 @@ SELECT
   res.status,
   res.conformance_pct,
   res.grade,
+  -- The grade comes from THESE, not a shared scale, so anything showing
+  -- a grade beside a percentage needs them to be reconcilable.
+  reg.target_pct,
+  reg.floor_pct,
   res.numerator,
   res.denominator,
   res.unit,

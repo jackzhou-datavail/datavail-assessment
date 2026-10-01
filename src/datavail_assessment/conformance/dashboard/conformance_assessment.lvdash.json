@@ -83,6 +83,8 @@
         "  title,\n",
         "  ROUND(conformance_pct, 1) AS conformance_pct,\n",
         "  grade,\n",
+        "  floor_pct,\n",
+        "  target_pct,\n",
         "  CONCAT(CAST(numerator AS STRING), ' / ', CAST(denominator AS STRING), ' ', unit) AS coverage_detail,\n",
         "  finding_count,\n",
         "  doc_path\n",
@@ -808,6 +810,14 @@
                       "expression": "`conformance_pct`"
                     },
                     {
+                      "name": "floor_pct",
+                      "expression": "`floor_pct`"
+                    },
+                    {
+                      "name": "target_pct",
+                      "expression": "`target_pct`"
+                    },
+                    {
                       "name": "grade",
                       "expression": "`grade`"
                     },
@@ -875,10 +885,32 @@
                     "numberFormat": "0.0"
                   },
                   {
+                    "fieldName": "floor_pct",
+                    "displayName": "Floor",
+                    "title": "Floor",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "target_pct",
+                    "displayName": "Target",
+                    "title": "Target",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
                     "fieldName": "grade",
                     "displayName": "Grade",
                     "title": "Grade",
-                    "order": 4,
+                    "order": 6,
                     "visible": true,
                     "alignContent": "left",
                     "type": "string",
@@ -888,7 +920,7 @@
                     "fieldName": "coverage_detail",
                     "displayName": "Objects",
                     "title": "Objects",
-                    "order": 5,
+                    "order": 7,
                     "visible": true,
                     "alignContent": "left",
                     "type": "string",
@@ -898,7 +930,7 @@
                     "fieldName": "finding_count",
                     "displayName": "Evidence Rows",
                     "title": "Evidence Rows",
-                    "order": 6,
+                    "order": 8,
                     "visible": true,
                     "alignContent": "center",
                     "type": "integer",
@@ -909,7 +941,7 @@
                     "fieldName": "doc_path",
                     "displayName": "Reference",
                     "title": "Reference",
-                    "order": 7,
+                    "order": 9,
                     "visible": true,
                     "alignContent": "left",
                     "type": "string",
@@ -921,7 +953,7 @@
                 "showTitle": true,
                 "title": "Priority Remediation List",
                 "showDescription": true,
-                "description": "Measured checks graded POOR or FAIR, ordered by severity then conformance."
+                "description": "Measured checks graded POOR or FAIR, worst severity first. Floor and Target are this check's own thresholds: below Floor is POOR, at or above Target is GOOD. They differ per check, which is why a lower percentage can carry a better grade."
               }
             }
           },
@@ -1006,7 +1038,7 @@
                 "showTitle": true,
                 "title": "30 Lowest-Scoring Checks",
                 "showDescription": true,
-                "description": "Worst first. Bars near zero are practices not being followed at all. Every measured check is in the table above; this chart is bounded because a taller one silently drops rows."
+                "description": "Worst first, coloured by grade. Each check has its own floor and target (see the table above), so colour and length do not always agree. Every measured check is in that table; this chart is bounded because a longer one silently drops rows."
               }
             }
           },
