@@ -25,13 +25,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "datavail_assessment.lvdash.json")
 
 # Page order is display order. Each module supplies datasets() and layout().
-PAGES = [adoption, conformance]
+PAGES = [adoption, conformance.SCORECARD, conformance.FINDINGS]
 
 
-def build(catalog: str, schema: str) -> dict:
+def build(catalog: str, schema: str, link_base: str = "",
+          org_id: str = "") -> dict:
     datasets, pages = [], []
     for page in PAGES:
-        datasets.extend(page.datasets(catalog, schema))
+        # Pages that build console links need the workspace; the rest
+        # ignore the extra arguments.
+        try:
+            built = page.datasets(catalog, schema, link_base, org_id)
+        except TypeError:
+            built = page.datasets(catalog, schema)
+        datasets.extend(built)
         pages.append({"name": page.PAGE_NAME,
                       "displayName": page.PAGE_TITLE,
                       "layout": page.layout()})
@@ -46,9 +53,16 @@ def main(argv=None) -> int:
     ap.add_argument("--results-schema",
                     default=os.environ.get("ASSESSMENT_RESULTS_SCHEMA", "results"))
     ap.add_argument("--out", default=DEFAULT_OUT)
+    # Baked in, because a dashboard's SQL cannot learn its own host or
+    # workspace id, and the Findings page links to the offending object.
+    ap.add_argument("--workspace-url",
+                    default=os.environ.get("ASSESSMENT_WORKSPACE_URL",
+                                           os.environ.get("DATABRICKS_HOST", "")))
+    ap.add_argument("--org-id", default=os.environ.get("ASSESSMENT_ORG_ID", ""))
     args = ap.parse_args(argv)
 
-    dash = build(args.results_catalog, args.results_schema)
+    dash = build(args.results_catalog, args.results_schema,
+                 args.workspace_url, args.org_id)
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(dash, fh, indent=2)
 

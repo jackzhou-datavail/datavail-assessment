@@ -94,6 +94,139 @@
         "WHERE run_id = (SELECT run_id FROM assessment.results.adoption_section_score ORDER BY run_ts DESC LIMIT 1) AND score = 0 AND measurable = TRUE\n",
         "ORDER BY section, check_id\n"
       ]
+    },
+    {
+      "name": "ds_overall",
+      "displayName": "Overall Conformance Score",
+      "queryLines": [
+        "SELECT\n",
+        "  s.overall_score,\n",
+        "  s.coverage_pct,\n",
+        "  s.confidence,\n",
+        "  s.critical_gaps,\n",
+        "  s.n_measured,\n",
+        "  s.n_not_available,\n",
+        "  s.n_not_applicable,\n",
+        "  s.n_patterns,\n",
+        "  CASE\n",
+        "    WHEN s.overall_score IS NULL THEN 'NOT AVAILABLE'\n",
+        "    WHEN s.overall_score >= 80 THEN 'GOOD'\n",
+        "    WHEN s.overall_score >= 60 THEN 'FAIR'\n",
+        "    ELSE 'POOR'\n",
+        "  END AS conformance_grade,\n",
+        "  r.run_ts,\n",
+        "  r.lookback_days,\n",
+        "  r.registry_version\n",
+        "FROM assessment.results.assessment_score s\n",
+        "JOIN assessment.results.assessment_run r ON r.run_id = s.run_id\n",
+        "WHERE s.run_id = (SELECT run_id FROM assessment.results.assessment_run WHERE status = 'COMPLETE' ORDER BY run_ts DESC LIMIT 1)\n"
+      ]
+    },
+    {
+      "name": "ds_category",
+      "displayName": "Category Readiness",
+      "queryLines": [
+        "SELECT\n",
+        "  category,\n",
+        "  ROUND(weighted_score, 1) AS score,\n",
+        "  ROUND(coverage_pct, 1)   AS coverage_pct,\n",
+        "  n_measured,\n",
+        "  n_not_available,\n",
+        "  n_not_applicable,\n",
+        "  n_poor,\n",
+        "  CASE\n",
+        "    WHEN weighted_score IS NULL THEN 'NOT AVAILABLE'\n",
+        "    WHEN weighted_score >= 80 THEN 'GOOD'\n",
+        "    WHEN weighted_score >= 60 THEN 'FAIR'\n",
+        "    ELSE 'POOR'\n",
+        "  END AS implementation\n",
+        "FROM assessment.results.category_score\n",
+        "WHERE run_id = (SELECT run_id FROM assessment.results.assessment_run WHERE status = 'COMPLETE' ORDER BY run_ts DESC LIMIT 1)\n"
+      ]
+    },
+    {
+      "name": "ds_checks",
+      "displayName": "Measured Checks",
+      "queryLines": [
+        "SELECT\n",
+        "  category,\n",
+        "  pattern_id,\n",
+        "  title,\n",
+        "  severity,\n",
+        "  grade,\n",
+        "  ROUND(conformance_pct, 1) AS conformance_pct,\n",
+        "  numerator,\n",
+        "  denominator,\n",
+        "  unit,\n",
+        "  finding_count,\n",
+        "  CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2\n",
+        "                WHEN 'MEDIUM' THEN 3 ELSE 4 END AS severity_rank\n",
+        "FROM assessment.results.v_latest_report\n",
+        "WHERE status = 'MEASURED'\n",
+        "ORDER BY conformance_pct, severity_rank\n",
+        "LIMIT 30\n"
+      ]
+    },
+    {
+      "name": "ds_gaps",
+      "displayName": "Priority Remediation",
+      "queryLines": [
+        "SELECT\n",
+        "  severity,\n",
+        "  category,\n",
+        "  pattern_id,\n",
+        "  title,\n",
+        "  ROUND(conformance_pct, 1) AS conformance_pct,\n",
+        "  grade,\n",
+        "  floor_pct,\n",
+        "  target_pct,\n",
+        "  CONCAT(CAST(numerator AS STRING), ' / ', CAST(denominator AS STRING), ' ', unit) AS coverage_detail,\n",
+        "  finding_count,\n",
+        "  doc_path\n",
+        "FROM assessment.results.v_latest_report\n",
+        "WHERE status = 'MEASURED' AND grade IN ('POOR', 'FAIR')\n",
+        "ORDER BY\n",
+        "  CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2\n",
+        "                WHEN 'MEDIUM' THEN 3 ELSE 4 END,\n",
+        "  conformance_pct\n"
+      ]
+    },
+    {
+      "name": "ds_findings",
+      "displayName": "Evidence",
+      "queryLines": [
+        "SELECT\n",
+        "  f.pattern_id,\n",
+        "  reg.category,\n",
+        "  reg.severity,\n",
+        "  f.object_type,\n",
+        "  f.object_name,\n",
+        "  f.owner,\n",
+        "  f.metric_name,\n",
+        "  f.metric_value,\n",
+        "  -- Relative, so the link works in any workspace. Each object type has\n",
+        "  -- its own console path; anything without one gets NULL and renders as\n",
+        "  -- plain text rather than a link to nowhere.\n",
+        "  CASE\n",
+        "    WHEN f.object_type IN ('TABLE', 'VIEW') AND size(split(f.object_id, '[.]')) = 3\n",
+        "      THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/explore/data/', replace(f.object_id, '.', '/'), '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'COLUMN' AND size(split(f.object_id, '[.]')) >= 4\n",
+        "      THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/explore/data/',\n",
+        "                  array_join(slice(split(f.object_id, '[.]'), 1, 3), '/'), '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'JOB'        THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/jobs/', f.object_id, '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'JOB_TASK'   THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/jobs/', split(f.object_id, ':')[0], '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'JOB_RUN'    THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/jobs/runs/', f.object_id, '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'EXPERIMENT' THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/ml/experiments/', f.object_id, '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'CLUSTER'    THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/compute/clusters/', f.object_id, '?o=7474645607548631')\n",
+        "    WHEN f.object_type = 'PIPELINE'   THEN concat('https://dbc-96494b8f-6b86.cloud.databricks.com/pipelines/', f.object_id, '?o=7474645607548631')\n",
+        "    ELSE NULL\n",
+        "  END AS object_url\n",
+        "FROM assessment.results.check_finding f\n",
+        "JOIN assessment.results.pattern_registry reg\n",
+        "  ON reg.run_id = f.run_id AND reg.pattern_id = f.pattern_id\n",
+        "WHERE f.run_id = (SELECT run_id FROM assessment.results.assessment_run WHERE status = 'COMPLETE' ORDER BY run_ts DESC LIMIT 1)\n",
+        "ORDER BY f.metric_value DESC NULLS LAST\n"
+      ]
     }
   ],
   "pages": [
@@ -819,27 +952,24 @@
       ]
     },
     {
-      "name": "conformance",
-      "displayName": "Conformance",
+      "name": "conformance_scorecard",
+      "displayName": "Conformance: Scorecard",
       "layout": [
         {
           "widget": {
-            "name": "conformance_placeholder",
+            "name": "p1_title",
             "multilineTextboxSpec": {
               "lines": [
-                "# Conformance - under construction\n",
+                "# Conformance Assessment\n",
                 "\n",
-                "This page is being rebuilt and shows no data yet.\n",
+                "**Of the things this workspace does, how well does it do them?**\n",
                 "\n",
-                "### [Open the Conformance Assessment dashboard](/dashboardsv3/01f1bce06cec1e7b8007a4aa4976e1d2/published)\n",
+                "- **Score** - of the checks we ran, how closely the practice was followed.\n",
+                "- **Coverage** - how many of the checks we could run at all.\n",
                 "\n",
-                "Its three pages carry everything this one used to show, and more:\n",
+                "**Low coverage is our gap, not the workspace's.** A check with no result is one we could not run - some are not written yet, others need a source the platform does not expose, or judgment a query cannot make. Low coverage means we looked at less, not that the workspace did less.\n",
                 "\n",
-                "- **Conformance: Scorecard** - overall score, coverage, per-category grades\n",
-                "- **Conformance: Findings** - remediation backlog and object-level evidence\n",
-                "- **Conformance: Coverage & Blind Spots** - what could not be measured, and why\n",
-                "\n",
-                "_Adoption, on the previous page, is unaffected - it is collected and scored independently._\n"
+                "Practices with nothing to apply to - no clusters to size, no shared data to govern - are left out of both numbers entirely.\n"
               ]
             }
           },
@@ -847,6 +977,995 @@
             "x": 0,
             "y": 0,
             "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_score",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "overall_score",
+                      "expression": "`overall_score`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "overall_score",
+                  "displayName": "Conformance Score"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Conformance Score",
+                "showDescription": true,
+                "description": "Severity-weighted % across measured checks"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_coverage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "coverage_pct",
+                  "displayName": "Measurement Coverage"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Measurement Coverage",
+                "showDescription": true,
+                "description": "Severity-weighted % of all checks we could run"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_grade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "conformance_grade",
+                      "expression": "`conformance_grade`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "conformance_grade",
+                  "displayName": "Overall Implementation"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Overall Implementation",
+                "showDescription": false
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_critical",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "critical_gaps",
+                      "expression": "`critical_gaps`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "critical_gaps",
+                  "displayName": "Critical Gaps"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Critical Gaps",
+                "showDescription": true,
+                "description": "CRITICAL-severity checks graded POOR"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_measured",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "n_measured",
+                      "expression": "`n_measured`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "n_measured",
+                  "displayName": "Checks Measured"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Checks Measured",
+                "showDescription": true,
+                "description": "Checks that produced a score"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_unavailable",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_overall",
+                  "fields": [
+                    {
+                      "name": "n_not_available",
+                      "expression": "`n_not_available`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "n_not_available",
+                  "displayName": "Checks Not Available"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Checks Not Available",
+                "showDescription": true,
+                "description": "Mostly practices with no check written yet; a few ran and found no data. Coverage page has the split."
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "cat_score_bars",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_category",
+                  "fields": [
+                    {
+                      "name": "score",
+                      "expression": "`score`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "implementation",
+                      "expression": "`implementation`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "score",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "implementation",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "GOOD",
+                        "color": "#10B981"
+                      },
+                      {
+                        "value": "FAIR",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "POOR",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "NOT AVAILABLE",
+                        "color": "#94A3B8"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "stack"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Implementation by Category",
+                "showDescription": true,
+                "description": "Weighted conformance per category, coloured by grade."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "cat_coverage_bars",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_category",
+                  "fields": [
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "coverage_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Measurement Coverage by Category",
+                "showDescription": true,
+                "description": "Severity-weighted %. Below 40%, read the score as indicative."
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "cat_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_category",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "implementation",
+                      "expression": "`implementation`"
+                    },
+                    {
+                      "name": "score",
+                      "expression": "`score`"
+                    },
+                    {
+                      "name": "coverage_pct",
+                      "expression": "`coverage_pct`"
+                    },
+                    {
+                      "name": "n_measured",
+                      "expression": "`n_measured`"
+                    },
+                    {
+                      "name": "n_not_available",
+                      "expression": "`n_not_available`"
+                    },
+                    {
+                      "name": "n_poor",
+                      "expression": "`n_poor`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "implementation",
+                    "displayName": "Implementation",
+                    "title": "Implementation",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "score",
+                    "displayName": "Score",
+                    "title": "Score",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
+                  },
+                  {
+                    "fieldName": "coverage_pct",
+                    "displayName": "Measurement Coverage",
+                    "title": "Measurement Coverage",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
+                  },
+                  {
+                    "fieldName": "n_measured",
+                    "displayName": "Checks Measured",
+                    "title": "Checks Measured",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "n_not_available",
+                    "displayName": "Checks Not Available",
+                    "title": "Checks Not Available",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "n_poor",
+                    "displayName": "Poor",
+                    "title": "Poor",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Category Scorecard",
+                "showDescription": true,
+                "description": "Every category with its grade, score, and how much of it was visible."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 7
+          }
+        }
+      ]
+    },
+    {
+      "name": "conformance_findings",
+      "displayName": "Conformance: Findings",
+      "layout": [
+        {
+          "widget": {
+            "name": "p2_title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Findings and Remediation\n",
+                "\n",
+                "Checks that produced a measurement, worst first. Grade compares the result against that check's own target and floor.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "gaps_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_gaps",
+                  "fields": [
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "conformance_pct",
+                      "expression": "`conformance_pct`"
+                    },
+                    {
+                      "name": "floor_pct",
+                      "expression": "`floor_pct`"
+                    },
+                    {
+                      "name": "target_pct",
+                      "expression": "`target_pct`"
+                    },
+                    {
+                      "name": "grade",
+                      "expression": "`grade`"
+                    },
+                    {
+                      "name": "coverage_detail",
+                      "expression": "`coverage_detail`"
+                    },
+                    {
+                      "name": "finding_count",
+                      "expression": "`finding_count`"
+                    },
+                    {
+                      "name": "doc_path",
+                      "expression": "`doc_path`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity",
+                    "title": "Severity",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "title",
+                    "displayName": "Check",
+                    "title": "Check",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "conformance_pct",
+                    "displayName": "Conformance %",
+                    "title": "Conformance %",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
+                  },
+                  {
+                    "fieldName": "floor_pct",
+                    "displayName": "Floor",
+                    "title": "Floor",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "target_pct",
+                    "displayName": "Target",
+                    "title": "Target",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "grade",
+                    "displayName": "Grade",
+                    "title": "Grade",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "coverage_detail",
+                    "displayName": "Objects",
+                    "title": "Objects",
+                    "order": 7,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "finding_count",
+                    "displayName": "Evidence Rows",
+                    "title": "Evidence Rows",
+                    "order": 8,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "integer",
+                    "displayAs": "number",
+                    "numberFormat": "0"
+                  },
+                  {
+                    "fieldName": "doc_path",
+                    "displayName": "Reference",
+                    "title": "Reference",
+                    "order": 9,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Priority Remediation List",
+                "showDescription": true,
+                "description": "Measured checks graded POOR or FAIR, worst severity first. Floor and Target are this check's own thresholds: below Floor is POOR, at or above Target is GOOD. They differ per check, which is why a lower percentage can carry a better grade."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 12,
+            "height": 10
+          }
+        },
+        {
+          "widget": {
+            "name": "checks_bars",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_checks",
+                  "fields": [
+                    {
+                      "name": "conformance_pct",
+                      "expression": "`conformance_pct`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "grade",
+                      "expression": "`grade`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "conformance_pct",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "title",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "grade",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "GOOD",
+                        "color": "#10B981"
+                      },
+                      {
+                        "value": "FAIR",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "POOR",
+                        "color": "#EF4444"
+                      },
+                      {
+                        "value": "NOT AVAILABLE",
+                        "color": "#94A3B8"
+                      }
+                    ]
+                  }
+                }
+              },
+              "mark": {
+                "layout": "stack"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "30 Lowest-Scoring Checks",
+                "showDescription": true,
+                "description": "Worst first, coloured by grade. Each check has its own floor and target (see the table above), so colour and length do not always agree. Every measured check is in that table; this chart is bounded because a longer one silently drops rows."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 12,
+            "height": 14
+          }
+        },
+        {
+          "widget": {
+            "name": "evidence_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_findings",
+                  "fields": [
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "pattern_id",
+                      "expression": "`pattern_id`"
+                    },
+                    {
+                      "name": "object_type",
+                      "expression": "`object_type`"
+                    },
+                    {
+                      "name": "object_name",
+                      "expression": "`object_name`"
+                    },
+                    {
+                      "name": "owner",
+                      "expression": "`owner`"
+                    },
+                    {
+                      "name": "metric_name",
+                      "expression": "`metric_name`"
+                    },
+                    {
+                      "name": "metric_value",
+                      "expression": "`metric_value`"
+                    },
+                    {
+                      "name": "object_url",
+                      "expression": "`object_url`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "severity",
+                    "displayName": "Severity",
+                    "title": "Severity",
+                    "order": 0,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category",
+                    "title": "Category",
+                    "order": 1,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "pattern_id",
+                    "displayName": "Check",
+                    "title": "Check",
+                    "order": 2,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "object_type",
+                    "displayName": "Type",
+                    "title": "Type",
+                    "order": 3,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "object_name",
+                    "displayName": "Object",
+                    "title": "Object",
+                    "order": 4,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "owner",
+                    "displayName": "Owner",
+                    "title": "Owner",
+                    "order": 5,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "metric_name",
+                    "displayName": "Metric",
+                    "title": "Metric",
+                    "order": 6,
+                    "visible": true,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
+                  },
+                  {
+                    "fieldName": "metric_value",
+                    "displayName": "Value",
+                    "title": "Value",
+                    "order": 7,
+                    "visible": true,
+                    "alignContent": "center",
+                    "type": "float",
+                    "displayAs": "number",
+                    "numberFormat": "0.0"
+                  },
+                  {
+                    "fieldName": "object_url",
+                    "displayName": "Open",
+                    "title": "Open",
+                    "order": 8,
+                    "visible": true,
+                    "alignContent": "center",
+                    "displayAs": "link",
+                    "type": "string",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "open",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "highlightLinks": true
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Evidence",
+                "showDescription": true,
+                "description": "The specific objects behind each finding \u2014 the remediation worklist. Open goes straight to the table, job or experiment."
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 12,
             "height": 10
           }
         }
