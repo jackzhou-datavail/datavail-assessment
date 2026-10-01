@@ -248,9 +248,15 @@ def bar(name, dataset, xf, yf, colorf, mappings, title, desc, x, y, w, h,
         enc["color"] = {"fieldName": colorf,
                         "scale": {"type": "categorical", "mappings": mappings}}
     fields = [xf, yf] + ([colorf] if colorf else [])
+    # "group" reserves a sub-slot per colour value for EVERY category, so
+    # a chart coloured by grade draws four slots per row and fills one -
+    # it reads as several bars per label with gaps between them. Each
+    # category here has exactly one row, so "stack" collapses to a single
+    # full-thickness bar and the colour still encodes the grade.
+    layout = "stack" if colorf else "group"
     return {"widget": {"name": name, "queries": q(dataset, fields),
                        "spec": {"version": 3, "widgetType": "bar", "encodings": enc,
-                                "mark": {"layout": "group"},
+                                "mark": {"layout": layout},
                                 "frame": {"showTitle": True, "title": title,
                                           "showDescription": True, "description": desc}}},
             "position": {"x": x, "y": y, "width": w, "height": h}}

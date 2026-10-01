@@ -528,7 +528,7 @@
                 }
               },
               "mark": {
-                "layout": "group"
+                "layout": "stack"
               },
               "frame": {
                 "showTitle": true,
@@ -998,7 +998,7 @@
                 }
               },
               "mark": {
-                "layout": "group"
+                "layout": "stack"
               },
               "frame": {
                 "showTitle": true,
