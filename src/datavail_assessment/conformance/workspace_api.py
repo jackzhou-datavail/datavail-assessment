@@ -30,6 +30,8 @@ _PACKAGED_TASK_KINDS = {
     "condition_task", "for_each_task",
 }
 
+PERMISSION_SAMPLE_SIZE = 25
+
 _JOBS_CACHE: dict[int, list[dict]] = {}
 _SCOPES_CACHE: dict[int, list[dict]] = {}
 
@@ -183,3 +185,46 @@ def check_secrets_management(executor, params):
         for s in scopes if not s["principals"] or s["individuals"]
     ][:500]
     return num, len(scopes), findings
+
+
+def check_workspace_object_permissions(executor, params):
+    """Workspace objects shared with groups, not named people.
+
+    Scope is job ACLs - the workspace objects this collector can
+    enumerate. IS_OWNER is excluded: every object has exactly one owner
+    and it is usually a person, so counting it would cap the score
+    below 100 for a correctly configured workspace.
+    """
+    # One extra REST call per job on top of job_specs, and the CLI
+    # transport spawns a process per call - 40-odd spawns was enough to
+    # push a whole run past ten minutes and time out unrelated SQL
+    # behind it. Bounded like table_detail's sampler for the same reason.
+    specs = job_specs(executor, params)[:PERMISSION_SAMPLE_SIZE]
+    num = den = 0
+    findings = []
+    for s in specs:
+        try:
+            acl = _api(executor, f"/api/2.0/permissions/jobs/{s['job_id']}")
+        except NotImplementedError:
+            raise
+        except Exception:  # noqa: BLE001
+            continue
+        for entry in acl.get("access_control_list") or []:
+            levels = [p.get("permission_level")
+                      for p in (entry.get("all_permissions") or [])]
+            if not levels or all(lv == "IS_OWNER" for lv in levels):
+                continue
+            den += 1
+            if entry.get("group_name") or entry.get("service_principal_name"):
+                num += 1
+            else:
+                findings.append({
+                    "object_type": "JOB_PERMISSION",
+                    "object_id": f"{s['job_id']}:{entry.get('user_name')}",
+                    "object_name": s["name"],
+                    "owner": entry.get("user_name"),
+                    "metric_name": "permission_to_individual",
+                    "metric_value": 1.0,
+                    "detail": f"{', '.join(lv for lv in levels if lv)} granted directly",
+                })
+    return num, den, findings[:500]

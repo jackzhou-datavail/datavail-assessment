@@ -915,4 +915,5 @@ PY_CHECKS = {
     "failure-notifications-and-duration-thresholds": ("jobs", wapi.check_failure_notifications),
     "notebooks-as-production-code": ("job tasks", wapi.check_notebooks_as_production_code),
     "secrets-management": ("secret scopes", wapi.check_secrets_management),
+    "workspace-object-permissions": ("job permissions", wapi.check_workspace_object_permissions),
 }

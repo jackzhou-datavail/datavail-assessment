@@ -80,7 +80,7 @@ patterns:
   - {id: environment-based-workspace-strategy, cat: platform-onboarding, sev: HIGH, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: workspace-topology}
   - {id: workspace-sprawl,               cat: platform-onboarding, sev: LOW, tier: ACCOUNT_API, impl: false, target: 90, floor: 60, applies: IF_MULTI_WORKSPACE, cause: workspace-topology}
   - {id: phased-deployment-planning,     cat: platform-onboarding, sev: LOW, tier: MANUAL,      impl: false, target: 80, floor: 40, applies: ALWAYS, cause: governance-structure}
-  - {id: workspace-object-permissions, cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: false, target: 90, floor: 60, applies: ALWAYS, cause: access-control}
+  - {id: workspace-object-permissions, cat: platform-onboarding, sev: HIGH, tier: WORKSPACE_API, impl: true , target: 90, floor: 60, applies: ALWAYS, cause: access-control}
   - {id: disaster-recovery-strategy, cat: platform-onboarding, sev: HIGH, tier: MANUAL, impl: false, target: 80, floor: 40, applies: ALWAYS, cause: resilience}
   - {id: misconfigured-classic-compute, cat: platform-onboarding, sev: HIGH, tier: SYSTEM_TABLE, impl: true , target: 90, floor: 60, applies: ALWAYS, cause: compute-governance}
   - {id: compute-right-sizing, cat: platform-onboarding, sev: MEDIUM, tier: SYSTEM_TABLE, impl: true , target: 80, floor: 50, applies: ALWAYS, cause: compute-efficiency}
