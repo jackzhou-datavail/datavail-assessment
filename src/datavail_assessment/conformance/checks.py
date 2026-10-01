@@ -795,13 +795,21 @@ check(
           AND result_state IS NOT NULL
     """,
     findings="""
-        SELECT 'JOB' AS object_type, CAST(job_id AS STRING) AS object_id,
-               CAST(job_id AS STRING) AS object_name, NULL AS owner,
+        WITH job_names AS (
+          SELECT job_id,
+                 MAX_BY(name, change_time) AS job_name,
+                 MAX_BY(run_as_user_name, change_time) AS run_as
+          FROM system.lakeflow.jobs GROUP BY job_id
+        )
+        SELECT 'JOB' AS object_type, CAST(r.job_id AS STRING) AS object_id,
+               COALESCE(jn.job_name, CAST(r.job_id AS STRING)) AS object_name,
+               jn.run_as AS owner,
                'failed_runs' AS metric_name, COUNT(*) * 1.0 AS metric_value
-        FROM system.lakeflow.job_run_timeline
+        FROM system.lakeflow.job_run_timeline r
+        LEFT JOIN job_names jn ON jn.job_id = r.job_id
         WHERE period_start_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
           AND upper(result_state) IN ('FAILED', 'TIMED_OUT', 'ERROR')
-        GROUP BY job_id
+        GROUP BY r.job_id, jn.job_name, jn.run_as
         ORDER BY metric_value DESC
         LIMIT 500
     """,
@@ -829,11 +837,19 @@ check(
           SELECT job_id, COUNT(*) AS n_tasks,
                  COUNT_IF(depends_on_keys IS NOT NULL AND size(depends_on_keys) > 0) AS n_dep
           FROM system.lakeflow.job_tasks GROUP BY job_id
+        ),
+        job_names AS (
+          SELECT job_id,
+                 MAX_BY(name, change_time) AS job_name,
+                 MAX_BY(run_as_user_name, change_time) AS run_as
+          FROM system.lakeflow.jobs GROUP BY job_id
         )
-        SELECT 'JOB' AS object_type, CAST(job_id AS STRING) AS object_id,
-               CAST(job_id AS STRING) AS object_name, NULL AS owner,
-               'tasks_without_dependencies' AS metric_name, n_tasks * 1.0 AS metric_value
-        FROM t WHERE n_tasks > 1 AND n_dep = 0
+        SELECT 'JOB' AS object_type, CAST(t.job_id AS STRING) AS object_id,
+               COALESCE(jn.job_name, CAST(t.job_id AS STRING)) AS object_name,
+               jn.run_as AS owner,
+               'tasks_without_dependencies' AS metric_name, t.n_tasks * 1.0 AS metric_value
+        FROM t LEFT JOIN job_names jn ON jn.job_id = t.job_id
+        WHERE t.n_tasks > 1 AND t.n_dep = 0
         ORDER BY metric_value DESC
         LIMIT 500
     """,
@@ -857,11 +873,19 @@ check(
         SELECT COUNT_IF(n_tasks > 1) AS numerator, COUNT(*) AS denominator FROM t
     """,
     findings="""
-        WITH t AS (SELECT job_id, COUNT(*) AS n_tasks FROM system.lakeflow.job_tasks GROUP BY job_id)
+        WITH job_names AS (
+          SELECT job_id,
+                 MAX_BY(name, change_time) AS job_name,
+                 MAX_BY(run_as_user_name, change_time) AS run_as
+          FROM system.lakeflow.jobs GROUP BY job_id
+        ),
+        t AS (SELECT job_id, COUNT(*) AS n_tasks FROM system.lakeflow.job_tasks GROUP BY job_id)
         SELECT 'JOB' AS object_type, CAST(t.job_id AS STRING) AS object_id,
-               CAST(t.job_id AS STRING) AS object_name, NULL AS owner,
+               COALESCE(jn.job_name, CAST(t.job_id AS STRING)) AS object_name,
+               jn.run_as AS owner,
                'single_task_job' AS metric_name, 1.0 AS metric_value
-        FROM t WHERE n_tasks = 1
+        FROM t LEFT JOIN job_names jn ON jn.job_id = t.job_id
+        WHERE n_tasks = 1
         LIMIT 500
     """,
 )

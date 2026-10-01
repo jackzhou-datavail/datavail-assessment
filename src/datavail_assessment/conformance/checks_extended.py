@@ -65,15 +65,23 @@ def register(check, BRONZE_RX, GOLD_RX, EMAIL_RX) -> None:
               AND result_state IS NOT NULL
         """,
         findings="""
+            WITH job_names AS (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS job_name,
+                     MAX_BY(run_as_user_name, change_time) AS run_as
+              FROM system.lakeflow.jobs GROUP BY job_id
+            )
             SELECT 'JOB_RUN' AS object_type,
-                   CAST(run_id AS STRING) AS object_id,
-                   CONCAT('job ', CAST(job_id AS STRING)) AS object_name,
-                   NULL AS owner,
-                   'result_state' AS metric_name, 1.0 AS metric_value
-            FROM system.lakeflow.job_run_timeline
-            WHERE period_end_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
-              AND result_state IS NOT NULL
-              AND result_state <> 'SUCCEEDED'
+                   CAST(r.run_id AS STRING) AS object_id,
+                   COALESCE(jn.job_name, CONCAT('job ', CAST(r.job_id AS STRING)))
+                     AS object_name,
+                   jn.run_as AS owner,
+                   r.result_state AS metric_name, 1.0 AS metric_value
+            FROM system.lakeflow.job_run_timeline r
+            LEFT JOIN job_names jn ON jn.job_id = r.job_id
+            WHERE r.period_end_time >= CURRENT_TIMESTAMP() - INTERVAL {lookback} DAYS
+              AND r.result_state IS NOT NULL
+              AND r.result_state <> 'SUCCEEDED'
             LIMIT 500
         """,
     )
@@ -759,12 +767,19 @@ def register(check, BRONZE_RX, GOLD_RX, EMAIL_RX) -> None:
               FROM system.lakeflow.job_tasks GROUP BY job_id, task_key
             )
             SELECT 'JOB_TASK' AS object_type,
-                   CONCAT(CAST(job_id AS STRING), ':', task_key) AS object_id,
-                   CONCAT('job ', CAST(job_id AS STRING), ' task ', task_key) AS object_name,
-                   NULL AS owner,
+                   CONCAT(CAST(l.job_id AS STRING), ':', l.task_key) AS object_id,
+                   CONCAT(COALESCE(jn.job_name, CAST(l.job_id AS STRING)),
+                          ' / ', l.task_key) AS object_name,
+                   jn.run_as AS owner,
                    'no_task_timeout' AS metric_name, 1.0 AS metric_value
-            FROM latest
-            WHERE delete_time IS NULL
+            FROM latest l
+            LEFT JOIN (
+              SELECT job_id,
+                     MAX_BY(name, change_time) AS job_name,
+                     MAX_BY(run_as_user_name, change_time) AS run_as
+              FROM system.lakeflow.jobs GROUP BY job_id
+            ) jn ON jn.job_id = l.job_id
+            WHERE l.delete_time IS NULL
               AND COALESCE(timeout_seconds, 0) = 0
               AND size(COALESCE(health_rules, array())) = 0
             LIMIT 500
