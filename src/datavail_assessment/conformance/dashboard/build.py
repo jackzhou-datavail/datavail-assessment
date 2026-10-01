@@ -205,16 +205,22 @@ ORDER BY
   reg.check_tier
 """),
 
-        ds("ds_tier", "Coverage by Tier", f"""
+        ds("ds_tier", "Outcome by Tier", f"""
 SELECT
   reg.check_tier,
-  COUNT(*) AS n_patterns,
-  SUM(CASE WHEN res.status = 'MEASURED' THEN 1 ELSE 0 END) AS n_measured
+  CASE
+    WHEN res.status = 'MEASURED'       THEN 'Measured'
+    WHEN res.status = 'NOT_APPLICABLE' THEN 'Nothing in scope'
+    WHEN res.status = 'ERROR'          THEN 'Error'
+    WHEN reg.implemented               THEN 'Check ran, no data'
+    ELSE 'No check written'
+  END AS outcome,
+  COUNT(*) AS n_checks
 FROM {base}.check_result res
 JOIN {base}.pattern_registry reg
   ON reg.run_id = res.run_id AND reg.pattern_id = res.pattern_id
 WHERE res.run_id = {run}
-GROUP BY reg.check_tier
+GROUP BY 1, 2
 """),
     ]
 
@@ -354,6 +360,14 @@ def pie(name, dataset, colorf, anglef, mappings, title, desc, x, y, w, h) -> dic
             "position": {"x": x, "y": y, "width": w, "height": h}}
 
 
+OUTCOME_COLORS = [
+    {"value": "Measured", "color": GREEN},
+    {"value": "Nothing in scope", "color": "#64748B"},
+    {"value": "Check ran, no data", "color": AMBER},
+    {"value": "No check written", "color": GREY},
+    {"value": "Error", "color": RED},
+]
+
 GRADE_COLORS = [{"value": "GOOD", "color": GREEN}, {"value": "FAIR", "color": AMBER},
                 {"value": "POOR", "color": RED}, {"value": "NOT AVAILABLE", "color": GREY}]
 STATUS_COLORS = [{"value": "MEASURED", "color": GREEN},
@@ -471,9 +485,12 @@ def build(catalog: str, schema: str, link_base: str = "",
         pie("status_pie", "ds_status", "status", "n_patterns", STATUS_COLORS,
             "Measurement Status", "How every check resolved against this workspace.",
             0, 4, 4, 7),
-        bar("tier_bars", "ds_tier", "n_patterns", "check_tier", None, None,
-            "Checks by Tier",
-            "Why each check without a result has none.", 4, 4, 8, 7),
+        bar("tier_bars", "ds_tier", "n_checks", "check_tier", "outcome", OUTCOME_COLORS,
+            "Outcome by Check Tier",
+            "Tier is what a check needs to run: SYSTEM_TABLE is SQL over system.*, "
+            "TABLE_DETAIL a per-object scan, WORKSPACE_API and ACCOUNT_API need REST, "
+            "MANUAL needs a conversation. Green is measured; grey is a check nobody "
+            "has written yet, which is the backlog.", 4, 4, 8, 7),
         table("blindspot_table", "ds_blindspots",
               [("severity", "Severity"), ("check_tier", "Tier"), ("category", "Category"),
                ("title", "Check"), ("reason", "Why Not Measured")],

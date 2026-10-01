@@ -165,17 +165,23 @@
     },
     {
       "name": "ds_tier",
-      "displayName": "Coverage by Tier",
+      "displayName": "Outcome by Tier",
       "queryLines": [
         "SELECT\n",
         "  reg.check_tier,\n",
-        "  COUNT(*) AS n_patterns,\n",
-        "  SUM(CASE WHEN res.status = 'MEASURED' THEN 1 ELSE 0 END) AS n_measured\n",
+        "  CASE\n",
+        "    WHEN res.status = 'MEASURED'       THEN 'Measured'\n",
+        "    WHEN res.status = 'NOT_APPLICABLE' THEN 'Nothing in scope'\n",
+        "    WHEN res.status = 'ERROR'          THEN 'Error'\n",
+        "    WHEN reg.implemented               THEN 'Check ran, no data'\n",
+        "    ELSE 'No check written'\n",
+        "  END AS outcome,\n",
+        "  COUNT(*) AS n_checks\n",
         "FROM assessment.results.check_result res\n",
         "JOIN assessment.results.pattern_registry reg\n",
         "  ON reg.run_id = res.run_id AND reg.pattern_id = res.pattern_id\n",
         "WHERE res.run_id = (SELECT run_id FROM assessment.results.assessment_run WHERE status = 'COMPLETE' ORDER BY run_ts DESC LIMIT 1)\n",
-        "GROUP BY reg.check_tier\n"
+        "GROUP BY 1, 2\n"
       ]
     }
   ],
@@ -1325,12 +1331,16 @@
                   "datasetName": "ds_tier",
                   "fields": [
                     {
-                      "name": "n_patterns",
-                      "expression": "`n_patterns`"
+                      "name": "n_checks",
+                      "expression": "`n_checks`"
                     },
                     {
                       "name": "check_tier",
                       "expression": "`check_tier`"
+                    },
+                    {
+                      "name": "outcome",
+                      "expression": "`outcome`"
                     }
                   ],
                   "disaggregated": true
@@ -1342,7 +1352,7 @@
               "widgetType": "bar",
               "encodings": {
                 "x": {
-                  "fieldName": "n_patterns",
+                  "fieldName": "n_checks",
                   "scale": {
                     "type": "quantitative"
                   }
@@ -1352,16 +1362,44 @@
                   "scale": {
                     "type": "categorical"
                   }
+                },
+                "color": {
+                  "fieldName": "outcome",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Measured",
+                        "color": "#10B981"
+                      },
+                      {
+                        "value": "Nothing in scope",
+                        "color": "#64748B"
+                      },
+                      {
+                        "value": "Check ran, no data",
+                        "color": "#F59E0B"
+                      },
+                      {
+                        "value": "No check written",
+                        "color": "#94A3B8"
+                      },
+                      {
+                        "value": "Error",
+                        "color": "#EF4444"
+                      }
+                    ]
+                  }
                 }
               },
               "mark": {
-                "layout": "group"
+                "layout": "stack"
               },
               "frame": {
                 "showTitle": true,
-                "title": "Checks by Tier",
+                "title": "Outcome by Check Tier",
                 "showDescription": true,
-                "description": "Why each check without a result has none."
+                "description": "Tier is what a check needs to run: SYSTEM_TABLE is SQL over system.*, TABLE_DETAIL a per-object scan, WORKSPACE_API and ACCOUNT_API need REST, MANUAL needs a conversation. Green is measured; grey is a check nobody has written yet, which is the backlog."
               }
             }
           },
