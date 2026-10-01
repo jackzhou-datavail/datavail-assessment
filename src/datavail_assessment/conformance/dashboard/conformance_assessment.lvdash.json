@@ -67,7 +67,9 @@
         "  CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2\n",
         "                WHEN 'MEDIUM' THEN 3 ELSE 4 END AS severity_rank\n",
         "FROM assessment.results.v_latest_report\n",
-        "WHERE status = 'MEASURED'\n"
+        "WHERE status = 'MEASURED'\n",
+        "ORDER BY conformance_pct, severity_rank\n",
+        "LIMIT 30\n"
       ]
     },
     {
@@ -1002,9 +1004,9 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "Conformance by Check",
+                "title": "30 Lowest-Scoring Checks",
                 "showDescription": true,
-                "description": "All measured checks. Bars near zero are the practices not being followed at all."
+                "description": "Worst first. Bars near zero are practices not being followed at all. Every measured check is in the table above; this chart is bounded because a taller one silently drops rows."
               }
             }
           },
@@ -1012,7 +1014,7 @@
             "x": 0,
             "y": 13,
             "width": 12,
-            "height": 11
+            "height": 14
           }
         },
         {

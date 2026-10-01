@@ -29,6 +29,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Grade bands for the conformance readiness score.
 GOOD, FAIR = 80, 60
+# A categorical bar chart renders only what fits its height and drops
+# the rest silently, so the dataset is bounded and ordered instead.
+# Unbounded it returned 56 rows, about 30 rendered, and WITHOUT an
+# ORDER BY those 30 were an arbitrary 30 rather than the worst 30.
+CHART_ROWS = 30
+
 MIN_COVERAGE = 40  # below this, a category score is not trustworthy
 
 GREEN, AMBER, RED, GREY = "#10B981", "#F59E0B", "#EF4444", "#94A3B8"
@@ -116,6 +122,8 @@ SELECT
                 WHEN 'MEDIUM' THEN 3 ELSE 4 END AS severity_rank
 FROM {base}.v_latest_report
 WHERE status = 'MEASURED'
+ORDER BY conformance_pct, severity_rank
+LIMIT {CHART_ROWS}
 """),
 
         ds("ds_gaps", "Priority Remediation", f"""
@@ -425,9 +433,11 @@ def build(catalog: str, schema: str, link_base: str = "",
               "Measured checks graded POOR or FAIR, ordered by severity then conformance.",
               0, 3, 12, 10),
         bar("checks_bars", "ds_checks", "conformance_pct", "title", "grade", GRADE_COLORS,
-            "Conformance by Check",
-            "All measured checks. Bars near zero are the practices not being followed at all.",
-            0, 13, 12, 11),
+            f"{CHART_ROWS} Lowest-Scoring Checks",
+            "Worst first. Bars near zero are practices not being followed at all. "
+            "Every measured check is in the table above; this chart is bounded "
+            "because a taller one silently drops rows.",
+            0, 13, 12, 14),
         table("evidence_table", "ds_findings",
               [("severity", "Severity"), ("category", "Category"), ("pattern_id", "Check"),
                ("object_type", "Type"), ("object_name", "Object"), ("owner", "Owner"),
