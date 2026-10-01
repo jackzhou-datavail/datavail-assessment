@@ -126,6 +126,14 @@ class WarehouseExecutor:
     def execute(self, sql: str) -> None:
         self.client.execute(sql)
 
+    def api(self, method: str, path: str, payload: dict | None = None) -> dict:
+        """A REST call, for checks whose evidence is not in any system
+        table - job notifications, secret scope ACLs, task types. Uses
+        the same CLI transport as the SQL path, so it needs no extra
+        credentials."""
+        # The CLI subcommand is lowercase: `databricks api get`.
+        return self.client._call(method.lower(), path, payload)
+
     def catalogs(self) -> set:
         try:
             return {r.get("catalog") for r in self.client.query("SHOW CATALOGS")}

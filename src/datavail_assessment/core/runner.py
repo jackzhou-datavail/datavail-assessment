@@ -83,6 +83,10 @@ def run_check(executor, item, params: dict, checks) -> Outcome:
         unit, fn = py[iid]
         try:
             num, den, findings = fn(executor, params)
+        except NotImplementedError as exc:
+            # The check is fine; this execution path cannot reach what it
+            # needs. That is a coverage gap, not a failure.
+            return Outcome(iid, NOT_AVAILABLE, reason=str(exc)[:800])
         except Exception as exc:  # noqa: BLE001
             return Outcome(iid, ERROR, reason=f"{type(exc).__name__}: {exc}"[:800])
         if den == 0:

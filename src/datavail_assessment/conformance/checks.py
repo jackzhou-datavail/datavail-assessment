@@ -23,6 +23,7 @@ mistake them for exact measurements.
 """
 
 from . import grants as gr
+from . import workspace_api as wapi
 from . import table_detail as td
 
 # Regexes used across checks to classify objects by naming convention.
@@ -911,4 +912,7 @@ PY_CHECKS = {
     "data-retention-policies": ("tables", td.check_retention_policy),
     "individual-user-grants": ("grants", gr.check_individual_user_grants),
     "group-based-access-control": ("principals", gr.check_group_based_access_control),
+    "failure-notifications-and-duration-thresholds": ("jobs", wapi.check_failure_notifications),
+    "notebooks-as-production-code": ("job tasks", wapi.check_notebooks_as_production_code),
+    "secrets-management": ("secret scopes", wapi.check_secrets_management),
 }

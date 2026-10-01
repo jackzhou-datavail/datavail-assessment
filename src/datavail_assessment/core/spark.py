@@ -65,6 +65,20 @@ class SparkExecutor:
     def query(self, sql: str):
         return [r.asDict() for r in self.spark.sql(sql).collect()]
 
+    def api(self, method: str, path: str, payload: dict | None = None) -> dict:
+        """REST through the Databricks SDK, which authenticates itself
+        inside a job. NotImplementedError (rather than a crash) when the
+        SDK is absent, so the runner records NOT_AVAILABLE with a reason
+        instead of an error."""
+        try:
+            from databricks.sdk import WorkspaceClient
+        except ImportError as exc:  # noqa: BLE001
+            raise NotImplementedError(
+                "Needs a REST call; databricks-sdk is not installed on this "
+                "cluster, so the check cannot run from the Spark path.") from exc
+        w = WorkspaceClient()
+        return w.api_client.do(method.upper(), path, body=payload) or {}
+
     def execute(self, sql: str) -> None:
         self.spark.sql(sql)
 
