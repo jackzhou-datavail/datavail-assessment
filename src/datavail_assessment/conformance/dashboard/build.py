@@ -248,10 +248,19 @@ _INTEGER = {"n_measured", "n_not_available", "n_not_applicable", "n_poor",
 
 
 def _column(field: str, label: str, order: int) -> dict:
+    """Numeric cells are centred, not right-aligned.
+
+    Lakeview centres table column HEADERS and offers no property to
+    change that - alignContent is the only alignment field in the whole
+    schema, and it governs cell content only. Right-aligned digits under
+    a centred header read as a mistake, so the cells follow the header.
+    Right alignment would scan better down a column of numbers; it is
+    not available without a mismatched header.
+    """
     numeric = field in _NUMERIC
     col = {"fieldName": field, "displayName": label, "title": label,
            "order": order, "visible": True,
-           "alignContent": "right" if numeric else "left"}
+           "alignContent": "center" if numeric else "left"}
     if numeric:
         col["type"] = "integer" if field in _INTEGER else "float"
         col["displayAs"] = "number"

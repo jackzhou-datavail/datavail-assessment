@@ -662,7 +662,7 @@
                     "title": "Score",
                     "order": 2,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "float",
                     "displayAs": "number",
                     "numberFormat": "0.0"
@@ -673,7 +673,7 @@
                     "title": "Measurement Coverage",
                     "order": 3,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "float",
                     "displayAs": "number",
                     "numberFormat": "0.0"
@@ -684,7 +684,7 @@
                     "title": "Checks Measured",
                     "order": 4,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "integer",
                     "displayAs": "number",
                     "numberFormat": "0"
@@ -695,7 +695,7 @@
                     "title": "Checks Not Available",
                     "order": 5,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "integer",
                     "displayAs": "number",
                     "numberFormat": "0"
@@ -706,7 +706,7 @@
                     "title": "Nothing In Scope",
                     "order": 6,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "integer",
                     "displayAs": "number",
                     "numberFormat": "0"
@@ -717,7 +717,7 @@
                     "title": "Poor",
                     "order": 7,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "integer",
                     "displayAs": "number",
                     "numberFormat": "0"
@@ -850,7 +850,7 @@
                     "title": "Conformance %",
                     "order": 3,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "float",
                     "displayAs": "number",
                     "numberFormat": "0.0"
@@ -881,7 +881,7 @@
                     "title": "Evidence Rows",
                     "order": 6,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "integer",
                     "displayAs": "number",
                     "numberFormat": "0"
@@ -1125,7 +1125,7 @@
                     "title": "Value",
                     "order": 7,
                     "visible": true,
-                    "alignContent": "right",
+                    "alignContent": "center",
                     "type": "float",
                     "displayAs": "number",
                     "numberFormat": "0.0"
