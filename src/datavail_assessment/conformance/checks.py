@@ -682,15 +682,27 @@ check(
     "metric-views-as-semantic-layer",
     unit="gold_schemas",
     requires={"system.information_schema.tables": ["table_catalog", "table_schema", "table_type"]},
-    note="Conforming = a gold/reporting schema that contains at least one metric view. Depends on METRIC_VIEW appearing as a table_type.",
+    note=("Conforming = a gold/reporting schema that contains at least one metric "
+          "view. A schema counts as gold if its own name matches, OR it holds a "
+          "gold-named relation - some workspaces name the tables rather than the "
+          "schema, and scoping on schema names alone reported no gold layer at all "
+          "while 26 gold-named relations existed. Depends on METRIC_VIEW appearing "
+          "as a table_type."),
     measure=f"""
-        WITH s AS (
-          SELECT table_catalog, table_schema,
-                 MAX(CASE WHEN upper(table_type) LIKE '%METRIC%' THEN 1 ELSE 0 END) AS has_mv
+        WITH gold AS (
+          SELECT DISTINCT table_catalog, table_schema
           FROM system.information_schema.tables
           WHERE table_catalog NOT IN ({{excluded}})
-            AND lower(table_schema) RLIKE '{GOLD_RX}'
-          GROUP BY table_catalog, table_schema
+            AND table_schema <> 'information_schema'
+            AND (lower(table_schema) RLIKE '{GOLD_RX}' OR lower(table_name) RLIKE '{GOLD_RX}')
+        ),
+        s AS (
+          SELECT g.table_catalog, g.table_schema,
+                 MAX(CASE WHEN upper(t.table_type) LIKE '%METRIC%' THEN 1 ELSE 0 END) AS has_mv
+          FROM gold g
+          JOIN system.information_schema.tables t
+            ON  t.table_catalog = g.table_catalog AND t.table_schema = g.table_schema
+          GROUP BY g.table_catalog, g.table_schema
         )
         SELECT SUM(has_mv) AS numerator, COUNT(*) AS denominator FROM s
     """,
