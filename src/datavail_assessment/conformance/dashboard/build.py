@@ -139,7 +139,24 @@ SELECT
   f.object_name,
   f.owner,
   f.metric_name,
-  f.metric_value
+  f.metric_value,
+  -- Relative, so the link works in any workspace. Each object type has
+  -- its own console path; anything without one gets NULL and renders as
+  -- plain text rather than a link to nowhere.
+  CASE
+    WHEN f.object_type IN ('TABLE', 'VIEW') AND size(split(f.object_id, '[.]')) = 3
+      THEN concat('/explore/data/', replace(f.object_id, '.', '/'))
+    WHEN f.object_type = 'COLUMN' AND size(split(f.object_id, '[.]')) >= 4
+      THEN concat('/explore/data/',
+                  array_join(slice(split(f.object_id, '[.]'), 1, 3), '/'))
+    WHEN f.object_type = 'JOB'          THEN concat('/jobs/', f.object_id)
+    WHEN f.object_type = 'JOB_TASK'     THEN concat('/jobs/', split(f.object_id, ':')[0])
+    WHEN f.object_type = 'JOB_RUN'      THEN concat('/jobs/runs/', f.object_id)
+    WHEN f.object_type = 'EXPERIMENT'   THEN concat('/ml/experiments/', f.object_id)
+    WHEN f.object_type = 'CLUSTER'      THEN concat('/compute/clusters/', f.object_id)
+    WHEN f.object_type = 'PIPELINE'     THEN concat('/pipelines/', f.object_id)
+    ELSE NULL
+  END AS object_url
 FROM {base}.check_finding f
 JOIN {base}.pattern_registry reg
   ON reg.run_id = f.run_id AND reg.pattern_id = f.pattern_id
@@ -247,7 +264,8 @@ _INTEGER = {"n_measured", "n_not_available", "n_not_applicable", "n_poor",
             "n_patterns", "n_error", "finding_count", "critical_gaps"}
 
 
-def _column(field: str, label: str, order: int) -> dict:
+def _column(field: str, label: str, order: int, link_url: str | None = None,
+            visible: bool = True) -> dict:
     """Numeric cells are centred, not right-aligned.
 
     Lakeview centres table column HEADERS and offers no property to
@@ -259,8 +277,18 @@ def _column(field: str, label: str, order: int) -> dict:
     """
     numeric = field in _NUMERIC
     col = {"fieldName": field, "displayName": label, "title": label,
-           "order": order, "visible": True,
+           "order": order, "visible": visible,
            "alignContent": "center" if numeric else "left"}
+    if link_url:
+        # {{ @ }} is this cell's own value; {{ other }} reads another
+        # column of the same row, which is why the URL column has to be
+        # fetched even though it is hidden.
+        col.update({"displayAs": "link", "type": "string",
+                    "linkUrlTemplate": "{{ " + link_url + " }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": True, "highlightLinks": True})
+        return col
     if numeric:
         col["type"] = "integer" if field in _INTEGER else "float"
         col["displayAs"] = "number"
@@ -271,11 +299,19 @@ def _column(field: str, label: str, order: int) -> dict:
     return col
 
 
-def table(name, dataset, cols, title, desc, x, y, w, h) -> dict:
-    return {"widget": {"name": name, "queries": q(dataset, [c[0] for c in cols]),
+def table(name, dataset, cols, title, desc, x, y, w, h,
+          link_urls=None, hidden=()) -> dict:
+    """`link_urls` maps a column to the column holding its URL; `hidden`
+    names columns fetched for those templates but not displayed."""
+    link_urls = link_urls or {}
+    all_cols = list(cols) + [(h_, h_) for h_ in hidden]
+    return {"widget": {"name": name, "queries": q(dataset, [c[0] for c in all_cols]),
                        "spec": {"version": 2, "widgetType": "table",
                                 "encodings": {"columns": [
-                                    _column(c[0], c[1], i) for i, c in enumerate(cols)]},
+                                    _column(c[0], c[1], i,
+                                            link_url=link_urls.get(c[0]),
+                                            visible=c[0] not in hidden)
+                                    for i, c in enumerate(all_cols)]},
                                 "frame": {"showTitle": True, "title": title,
                                           "showDescription": True, "description": desc}}},
             "position": {"x": x, "y": y, "width": w, "height": h}}
@@ -382,8 +418,10 @@ def build(catalog: str, schema: str) -> dict:
                ("object_type", "Type"), ("object_name", "Object"), ("owner", "Owner"),
                ("metric_name", "Metric"), ("metric_value", "Value")],
               "Evidence",
-              "The specific objects behind each finding — the remediation worklist.",
-              0, 24, 12, 10),
+              "The specific objects behind each finding — the remediation worklist. "
+              "Object links through to the table, job or experiment.",
+              0, 24, 12, 10,
+              link_urls={"object_name": "object_url"}, hidden=("object_url",)),
     ]
 
     page3 = [

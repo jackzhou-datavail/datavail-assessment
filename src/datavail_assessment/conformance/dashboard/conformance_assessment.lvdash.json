@@ -104,7 +104,24 @@
         "  f.object_name,\n",
         "  f.owner,\n",
         "  f.metric_name,\n",
-        "  f.metric_value\n",
+        "  f.metric_value,\n",
+        "  -- Relative, so the link works in any workspace. Each object type has\n",
+        "  -- its own console path; anything without one gets NULL and renders as\n",
+        "  -- plain text rather than a link to nowhere.\n",
+        "  CASE\n",
+        "    WHEN f.object_type IN ('TABLE', 'VIEW') AND size(split(f.object_id, '[.]')) = 3\n",
+        "      THEN concat('/explore/data/', replace(f.object_id, '.', '/'))\n",
+        "    WHEN f.object_type = 'COLUMN' AND size(split(f.object_id, '[.]')) >= 4\n",
+        "      THEN concat('/explore/data/',\n",
+        "                  array_join(slice(split(f.object_id, '[.]'), 1, 3), '/'))\n",
+        "    WHEN f.object_type = 'JOB'          THEN concat('/jobs/', f.object_id)\n",
+        "    WHEN f.object_type = 'JOB_TASK'     THEN concat('/jobs/', split(f.object_id, ':')[0])\n",
+        "    WHEN f.object_type = 'JOB_RUN'      THEN concat('/jobs/runs/', f.object_id)\n",
+        "    WHEN f.object_type = 'EXPERIMENT'   THEN concat('/ml/experiments/', f.object_id)\n",
+        "    WHEN f.object_type = 'CLUSTER'      THEN concat('/compute/clusters/', f.object_id)\n",
+        "    WHEN f.object_type = 'PIPELINE'     THEN concat('/pipelines/', f.object_id)\n",
+        "    ELSE NULL\n",
+        "  END AS object_url\n",
         "FROM assessment.results.check_finding f\n",
         "JOIN assessment.results.pattern_registry reg\n",
         "  ON reg.run_id = f.run_id AND reg.pattern_id = f.pattern_id\n",
@@ -1038,6 +1055,10 @@
                     {
                       "name": "metric_value",
                       "expression": "`metric_value`"
+                    },
+                    {
+                      "name": "object_url",
+                      "expression": "`object_url`"
                     }
                   ],
                   "disaggregated": true
@@ -1096,8 +1117,13 @@
                     "order": 4,
                     "visible": true,
                     "alignContent": "left",
+                    "displayAs": "link",
                     "type": "string",
-                    "displayAs": "string"
+                    "linkUrlTemplate": "{{ object_url }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "highlightLinks": true
                   },
                   {
                     "fieldName": "owner",
@@ -1129,6 +1155,16 @@
                     "type": "float",
                     "displayAs": "number",
                     "numberFormat": "0.0"
+                  },
+                  {
+                    "fieldName": "object_url",
+                    "displayName": "object_url",
+                    "title": "object_url",
+                    "order": 8,
+                    "visible": false,
+                    "alignContent": "left",
+                    "type": "string",
+                    "displayAs": "string"
                   }
                 ]
               },
@@ -1136,7 +1172,7 @@
                 "showTitle": true,
                 "title": "Evidence",
                 "showDescription": true,
-                "description": "The specific objects behind each finding \u2014 the remediation worklist."
+                "description": "The specific objects behind each finding \u2014 the remediation worklist. Object links through to the table, job or experiment."
               }
             }
           },
