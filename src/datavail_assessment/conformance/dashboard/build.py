@@ -541,7 +541,23 @@ def main() -> int:
                     help="Workspace id for the ?o= parameter. Find it with: SELECT "
                          "workspace_id FROM system.compute.warehouses WHERE "
                          "warehouse_id = '<id>'")
+    ap.add_argument("--profile",
+                    default=os.environ.get("DATABRICKS_CONFIG_PROFILE", ""),
+                    help="CLI profile to derive --workspace-url and --org-id from, "
+                         "so a new workspace needs neither spelled out")
     args = ap.parse_args()
+
+    # Explicit flags win; the profile fills whatever is left. Neither is
+    # fatal - without them the Evidence links fall back to being
+    # workspace-relative, which still works in the workspace that
+    # generated them.
+    if args.profile and not (args.workspace_url and args.org_id):
+        from datavail_assessment.core.workspace_info import derive
+        host, org = derive(args.profile)
+        args.workspace_url = args.workspace_url or (host or "")
+        args.org_id = args.org_id or (org or "")
+        print(f"  from profile {args.profile}: "
+              f"url={args.workspace_url or '(none)'} org={args.org_id or '(none)'}")
 
     dash = build(args.results_catalog, args.results_schema,
                  args.workspace_url, args.org_id,
