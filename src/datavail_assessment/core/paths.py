@@ -45,3 +45,28 @@ def patterns_dir() -> str:
         return candidate
 
     return os.path.join(os.getcwd(), "patterns")
+
+
+def external_dir() -> str:
+    """Absolute path to resources/external.
+
+    Mirrored assets from another repository, fetched by
+    scripts/fetch_external.py and excluded by .gitignore. Same
+    resolution order and the same reasoning as patterns_dir(): repo
+    data, not package data, so it cannot be found relative to the
+    installed package alone.
+
+      1. ASSESSMENT_EXTERNAL_DIR, if set
+      2. resources/external beside an installed package
+      3. resources/external under the current working directory
+    """
+    env = os.environ.get("ASSESSMENT_EXTERNAL_DIR")
+    if env:
+        return env
+
+    repo_root = os.path.dirname(os.path.dirname(PACKAGE_ROOT))
+    candidate = os.path.join(repo_root, "resources", "external")
+    if os.path.isdir(candidate):
+        return candidate
+
+    return os.path.join(os.getcwd(), "resources", "external")

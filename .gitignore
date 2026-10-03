@@ -8,3 +8,9 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Mirrored from another repository by scripts/fetch_external.py, so the
+# content is not ours to version. Pinned in that script; re-fetch rather
+# than editing in place. `sync.include` in databricks.yml puts it back
+# into the deploy, since bundle sync otherwise honours this file.
+resources/external/

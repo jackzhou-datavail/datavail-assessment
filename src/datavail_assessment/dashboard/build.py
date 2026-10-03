@@ -19,13 +19,14 @@ import argparse
 import json
 import os
 
-from .pages import adoption, conformance
+from .pages import adoption, conformance, cost_per_query
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.join(HERE, "datavail_assessment.lvdash.json")
 
 # Page order is display order. Each module supplies datasets() and layout().
-PAGES = [adoption, conformance.SCORECARD, conformance.FINDINGS]
+PAGES = [adoption, conformance.SCORECARD, conformance.FINDINGS,
+         cost_per_query]
 
 
 def build(catalog: str, schema: str, link_base: str = "",
@@ -59,8 +60,24 @@ def main(argv=None) -> int:
                     default=os.environ.get("ASSESSMENT_WORKSPACE_URL",
                                            os.environ.get("DATABRICKS_HOST", "")))
     ap.add_argument("--org-id", default=os.environ.get("ASSESSMENT_ORG_ID", ""))
+    ap.add_argument("--profile",
+                    default=os.environ.get("DATABRICKS_CONFIG_PROFILE", ""),
+                    help="CLI profile to derive --workspace-url and --org-id from, "
+                         "so a new workspace needs neither spelled out")
     args = ap.parse_args(argv)
 
+
+    # Explicit flags win; the profile fills whatever is left. Neither is
+    # fatal - without them the Evidence links fall back to being
+    # workspace-relative, which still works in the workspace that
+    # generated them.
+    if args.profile and not (args.workspace_url and args.org_id):
+        from datavail_assessment.core.workspace_info import derive
+        host, org = derive(args.profile)
+        args.workspace_url = args.workspace_url or (host or "")
+        args.org_id = args.org_id or (org or "")
+        print(f"  from profile {args.profile}: "
+              f"url={args.workspace_url or '(none)'} org={args.org_id or '(none)'}")
     dash = build(args.results_catalog, args.results_schema,
                  args.workspace_url, args.org_id)
     with open(args.out, "w", encoding="utf-8") as fh:

@@ -54,6 +54,42 @@ variables:
 # The collector ships as a wheel, installed by the job environment below.
 # job_entry.py is a three-line launcher that imports it: an exec()d script has
 # no __file__, so the code it calls into must not depend on one.
+# resources/external/ is gitignored - it mirrors another repository, see
+# scripts/fetch_external.py - but bundle sync honours .gitignore, so the
+# files would be absent from the deploy without this.
+#
+# The postinit hook above fetches them on every validate and deploy, so
+# there is no manual step and a fresh clone needs none. postinit rather
+# than preinit because the hook needs ${var.*}, and variables are not
+# resolved until after init - at preinit the command reaches bash with
+# the literal string and fails on "bad substitution".
+#
+# The prebuild hook derives the workspace URL and id from the profile
+# rather than taking them as variables: a dashboard bakes absolute
+# console links into its JSON, and hardcoding them is one more thing to
+# change on a new workspace. ${workspace.host} resolves EMPTY when the
+# host comes from a profile, so the builder reads ~/.databrickscfg and
+# parses ?o= out of a job run URL. Pass --workspace-url/--org-id by hand
+# if a workspace has no job runs yet.
+#
+# The postinit hook also decides where the materialized view lives:
+# upstream hardcodes main.default, there is no main catalog here, and
+# the DDL and the dashboard have to agree. It goes in
+# results_catalog.results alongside the assessment tables - one schema
+# for everything this bundle creates, rather than a second one to
+# remember. Change those variables and REGENERATE the dashboard, since
+# the Cost per Query page embeds the retargeted JSON:
+#
+#   python -m datavail_assessment.dashboard.build #     --workspace-url https://<host> --org-id <id>
+experimental:
+  scripts:
+    postinit: python scripts/fetch_external.py --catalog ${var.results_catalog} --schema ${var.results_schema}
+    prebuild: python -m datavail_assessment.dashboard.build --results-catalog ${var.results_catalog} --results-schema ${var.results_schema} --profile ${workspace.profile}
+
+sync:
+  include:
+    - resources/external/**
+
 artifacts:
   collector_wheel:
     type: whl
@@ -149,6 +185,30 @@ resources:
 
       tags:
         purpose: platform-assessment
+        owner: datavail
+
+    # Creates main.default.dbsql_cost_per_query from the mirrored DDL. A
+    # single CREATE OR REPLACE MATERIALIZED VIEW, so running it again is
+    # harmless, and the statement carries its own refresh SCHEDULE - this
+    # job exists to apply the definition, not to keep it fresh. No
+    # schedule here for the same reason.
+    #
+    # Separate from platform_assessment_collect on purpose: that job
+    # measures the workspace and writes to the results catalog, this one
+    # provisions a view in main.default. Different concern, different
+    # blast radius.
+    cost_per_query_mv:
+      name: "Cost per Query — create MV"
+      tasks:
+        - task_key: create_mv
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ${workspace.file_path}/resources/external/DBSQL Cost Per Query MV (PrPr).sql
+              source: WORKSPACE
+      max_concurrent_runs: 1
+      tags:
+        purpose: cost-observability
         owner: datavail
 
   # ── Dashboard ────────────────────────────────────────────────────────────
